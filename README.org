@@ -1,0 +1,16 @@
+* TODO
+
+- [X] next thing
+  - [X] write a "now" date
+  - [X] see if that just works regardless of type of timestamp
+  - [X] figure out timestamps
+- [X] v0.1
+  - [X] cli arguments
+  - [X] package
+- [ ] notification!
+- [ ] next but skip n
+- [ ] next n items
+- [ ] details
+- [ ] add new (?)
+- [ ] remove (?)
+- [ ] socket mode?
