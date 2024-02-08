@@ -8,9 +8,9 @@
   - [X] cli arguments
   - [X] package
 
-- [-] v0.2 (basic bar features)
+- [X] v0.2 (basic bar features)
   - [X] produce json
-  - [ ] next but skip n
+  - [X] next but skip n
 
 - [ ] v0.3 (notifications)
 - [ ] socket mode?
