@@ -7,10 +7,20 @@
 - [X] v0.1
   - [X] cli arguments
   - [X] package
-- [ ] notification!
-- [ ] next but skip n
-- [ ] next n items
-- [ ] details
-- [ ] add new (?)
-- [ ] remove (?)
+
+- [-] v0.2 (basic bar features)
+  - [X] produce json
+  - [ ] next but skip n
+
+- [ ] v0.3 (notifications)
 - [ ] socket mode?
+  - [ ] notification!
+
+
+- [ ] v0.4 (window)
+  - [ ] next n items
+  - [ ] details
+
+- [ ] more
+  - [ ] add new (?)
+  - [ ] remove (?)

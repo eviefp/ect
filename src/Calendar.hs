@@ -15,12 +15,15 @@ module Calendar
 import Chronos qualified as C
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.IO.Class qualified as IO
+import Data.Aeson ((.=))
+import Data.Aeson qualified as Aeson
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.Generics (Generic)
 import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
 
@@ -47,13 +50,13 @@ dayOfWeek = C.caseDayOfWeek (C.buildDayOfWeekMatch "Sun" "Mon" "Tue" "Wed" "Thu"
 
 display :: Entry -> Text
 display Entry {..} = time entryDates <> " " <> entryTitle
-  where
-    time :: Org.TimestampData -> Text
-    time tsd = case getStartDate tsd of
-        (_, Just (h, m), _, _) -> ishow h <> ":" <> ishow m
-        -- All day evetnts:
-        _ -> "*"
 
+time :: Org.TimestampData -> Text
+time tsd = case getStartDate tsd of
+    (_, Just (h, m), _, _) -> ishow h <> ":" <> ishow m
+    -- All day evetnts:
+    _ -> "*"
+  where
     ishow :: Int -> Text
     ishow i
         | i < 10 = "0" <> T.pack (show i)
@@ -64,11 +67,25 @@ data Entry = Entry
     , entryDates :: !Org.TimestampData
     , entrySection :: !(Maybe Org.OrgSection)
     }
-    deriving stock (Eq)
+    deriving stock (Eq, Generic)
 
 instance Ord Entry where
     compare :: Entry -> Entry -> Ordering
     compare = compare `on` (getStartDate . entryDates)
+
+instance Aeson.ToJSON Entry where
+    toJSON :: Entry -> Aeson.Value
+    toJSON Entry {..} =
+        Aeson.object
+            [ "title" .= entryTitle
+            , "time" .= time entryDates
+            ]
+
+    toEncoding :: Entry -> Aeson.Encoding
+    toEncoding Entry {..} =
+        Aeson.pairs $
+            "title" .= entryTitle
+                <> "time" .= time entryDates
 
 getStartDate :: Org.TimestampData -> Org.DateTime
 getStartDate = \case
