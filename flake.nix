@@ -21,6 +21,7 @@
           hp = pkgs.haskell.packages.ghc963.override {
             overrides = hself: hsuper: {
               org-parser = hlib.doJailbreak (hlib.markUnbroken hsuper.org-parser);
+              async-timer = hlib.dontCheck (hlib.doJailbreak (hlib.markUnbroken hsuper.async-timer));
             };
           };
         in

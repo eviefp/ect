@@ -9,10 +9,10 @@ module Calendar
     , mkCalendar
     , entries
     , now
-    , display
+    , entriesAfter
+    , getNth
     ) where
 
-import Chronos qualified as C
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.IO.Class qualified as IO
 import Data.Aeson ((.=))
@@ -22,75 +22,52 @@ import Data.Maybe (mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
-import Data.Text qualified as T
+import Data.Time qualified as Time
+import Data.Time.Calendar.MonthDay qualified as Time
+import Data.Time.Calendar.OrdinalDate qualified as Time
 import GHC.Generics (Generic)
 import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
 
-now :: (MonadIO m) => m Org.TimestampData
-now =
-    (C.timeToDatetime <$> IO.liftIO C.now)
-        >>= \case
-            C.Datetime {..} ->
-                let
-                    C.Date {..} = datetimeDate
-                    C.TimeOfDay {..} = datetimeTime
-                    date =
-                        ( C.getYear dateYear
-                        , C.getMonth dateMonth + 1
-                        , C.getDayOfMonth dateDay
-                        , Just . dayOfWeek $ C.dateToDayOfWeek datetimeDate
-                        )
-                    time = (timeOfDayHour + 2, timeOfDayMinute)
-                in
-                    pure $ Org.TimestampData False (date, Just time, Nothing, Nothing)
+now :: (MonadIO m) => m Time.LocalTime
+now = Time.zonedTimeToLocalTime <$> IO.liftIO Time.getZonedTime
 
-dayOfWeek :: C.DayOfWeek -> Text
-dayOfWeek = C.caseDayOfWeek (C.buildDayOfWeekMatch "Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat")
-
-display :: Entry -> Text
-display Entry {..} = time entryDates <> " " <> entryTitle
-
-time :: Org.TimestampData -> Text
-time tsd = case getStartDate tsd of
-    (_, Just (h, m), _, _) -> ishow h <> ":" <> ishow m
-    -- All day evetnts:
-    _ -> "*"
-  where
-    ishow :: Int -> Text
-    ishow i
-        | i < 10 = "0" <> T.pack (show i)
-        | otherwise = T.pack (show i)
+getNth :: Int -> Time.LocalTime -> Calendar -> Maybe Entry
+getNth n now' =
+    (Set.lookupMin . Set.drop n . snd . Set.split (Entry mempty now' Nothing)) . entries
 
 data Entry = Entry
     { entryTitle :: !Text
-    , entryDates :: !Org.TimestampData
+    , entryStartTime :: !Time.LocalTime
     , entrySection :: !(Maybe Org.OrgSection)
     }
     deriving stock (Eq, Generic)
 
 instance Ord Entry where
     compare :: Entry -> Entry -> Ordering
-    compare = compare `on` (getStartDate . entryDates)
+    compare = compare `on` entryStartTime
 
 instance Aeson.ToJSON Entry where
     toJSON :: Entry -> Aeson.Value
     toJSON Entry {..} =
         Aeson.object
             [ "title" .= entryTitle
-            , "time" .= time entryDates
+            , "time" .= printTime entryStartTime
+            , "date" .= printDate entryStartTime
             ]
 
     toEncoding :: Entry -> Aeson.Encoding
     toEncoding Entry {..} =
         Aeson.pairs $
             "title" .= entryTitle
-                <> "time" .= time entryDates
+                <> "time" .= printTime entryStartTime
+                <> "date" .= printDate entryStartTime
 
-getStartDate :: Org.TimestampData -> Org.DateTime
-getStartDate = \case
-    Org.TimestampData _ st -> st
-    Org.TimestampRange _ st _ -> st
+printTime :: Time.LocalTime -> String
+printTime = Time.formatTime Time.defaultTimeLocale "%H:%M"
+
+printDate :: Time.LocalTime -> String
+printDate = Time.formatTime Time.defaultTimeLocale "%Y-%m-%d"
 
 newtype Calendar = Calendar (Set Entry)
 
@@ -106,27 +83,44 @@ mkCalendar files =
 
 sectionToEntry :: Org.OrgSection -> Maybe Entry
 sectionToEntry section@Org.OrgSection {..} =
-    case findEntryDates sectionChildren of
+    case findEntryStartTime sectionChildren of
         Nothing -> Nothing
-        Just entryDates ->
+        Just entryStartTime ->
             Just $ Entry {..}
   where
     entryTitle = sectionRawTitle
 
     entrySection = Just section
 
-    findEntryDates :: [Org.OrgElement] -> Maybe Org.TimestampData
-    findEntryDates = \case
+    findEntryStartTime :: [Org.OrgElement] -> Maybe Time.LocalTime
+    findEntryStartTime = \case
         [] -> Nothing
         (x : xs) ->
             case Org.elementData x of
                 Org.Paragraph paragraphs -> findDatesInParagraphs paragraphs
-                _ -> findEntryDates xs
+                _ -> findEntryStartTime xs
 
-    findDatesInParagraphs :: [Org.OrgObject] -> Maybe Org.TimestampData
+    findDatesInParagraphs :: [Org.OrgObject] -> Maybe Time.LocalTime
     findDatesInParagraphs = \case
         [] -> Nothing
         (x : xs) ->
             case x of
-                Org.Timestamp tdata -> Just tdata
+                Org.Timestamp (Org.TimestampData _ dt) -> parseTimestampData dt
+                Org.Timestamp (Org.TimestampRange _ dt _) -> parseTimestampData dt
                 _ -> findDatesInParagraphs xs
+
+    parseTimestampData :: Org.DateTime -> Maybe Time.LocalTime
+    parseTimestampData ((y, m, d, _), mtime, _, _) = do
+        let
+            year = toInteger y
+            isLeapYear = Time.isLeapYear year
+        dayOfYear <- Time.monthAndDayToDayOfYearValid isLeapYear m d
+        localDay <- Time.fromOrdinalDateValid year dayOfYear
+        localTimeOfDay <-
+            case mtime of
+                Nothing -> Just Time.midnight
+                Just (hour, minute) -> Time.makeTimeOfDayValid hour minute 0
+        pure $ Time.LocalTime {..}
+
+entriesAfter :: Int -> Entry -> Set Entry -> Set Entry
+entriesAfter k entry = Set.take k . snd . Set.split entry

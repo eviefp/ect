@@ -71,15 +71,22 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.18.1.0
-                    , chronos
-                    , containers
+                    , aeson
+                    , async
+                    , async-timer
                     , bytestring
+                    , containers
+                    , directory
+                    , iso8601-time
+                    , network
+                    , org-parser
+                    , process
+                    , stm
                     , text
                     , time
-                    , org-parser
+                    , time
+                    , unbounded-delays
                     , yaml
-                    , aeson
-                    , directory
 
     -- Directories containing source files.
     hs-source-dirs:   src

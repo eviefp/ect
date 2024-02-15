@@ -12,10 +12,11 @@
   - [X] produce json
   - [X] next but skip n
 
-- [ ] v0.3 (notifications)
-- [ ] socket mode?
-  - [ ] notification!
-
+- [X] v0.3 (notifications)
+  - [X] socket mode?
+  - [X] notification!
+  - [X] date/day
+  - [X] use a different date/time library ffs
 
 - [ ] v0.4 (window)
   - [ ] next n items
