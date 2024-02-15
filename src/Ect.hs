@@ -188,7 +188,7 @@ runDaemon tcal = Network.withSocketsDo do
         entity <- STM.atomically $ STM.readTChan peerChannel
         let
             result = T.decodeUtf8 . BS.toStrict . Aeson.encode $ entity
-        TF.useAsPtr result $ \ptr len ->
+        TF.useAsPtr (result <> "\n") $ \ptr len ->
             Network.sendBuf conn ptr (fromEnum len)
 
     broadcastTimer :: STM.TChan C.Entry -> STM.TVar Int -> IO ()
