@@ -64,30 +64,54 @@ defaultConfigPath = "ect/ect.yaml"
 
 data RunMode
     = Next !Int
+    | Inc
+    | Dec
     | Server
 
 parseArgs :: [String] -> RunMode
 parseArgs = \case
     ("--skip" : k : _) -> Next (fromMaybe 0 $ R.readMaybe k)
+    ("--up" : _) -> Inc
+    ("--down" : _) -> Dec
     ("--server" : _) -> Server
     _ -> Next 0
+
+runModeToText :: RunMode -> Text
+runModeToText = \case
+    Server -> error "cannot print Server mode"
+    Next k -> T.pack $ show k <> "\n"
+    Inc -> "inc\n"
+    Dec -> "dec\n"
+
+textToRunMode :: Text -> RunMode
+textToRunMode input =
+    case TextRead.decimal input of
+        Left _ ->
+            if input == "inc\n"
+                then Inc
+                else
+                    if input == "dec\n"
+                        then Dec
+                        else Next 0
+        Right (n, _) -> do
+            Next n
 
 eval :: RunMode -> IO ()
 eval runMode = do
     config <- Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath >>= Yaml.decodeFileThrow
     cal <- C.mkCalendar (T.unpack <$> calendars config)
     case runMode of
-        Next n -> do
-            socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
-            Network.connect socket $ Network.SockAddrUnix socketAddress
-            TF.useAsPtr (T.pack $ show n <> "\n") $ \ptr len ->
-                void $ Network.sendBuf socket ptr (fromEnum len)
-            Network.close socket
         Server -> do
             calTvar <- STM.newTVarIO cal
             Async.concurrently_
                 (Async.concurrently_ (updateCalendar config calTvar) (runDaemon calTvar))
                 (runNotifications config calTvar)
+        rm -> do
+            socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
+            Network.connect socket $ Network.SockAddrUnix socketAddress
+            TF.useAsPtr (runModeToText rm) $ \ptr len ->
+                void $ Network.sendBuf socket ptr (fromEnum len)
+            Network.close socket
 
 updateCalendar :: EctConfig -> TVar C.Calendar -> IO ()
 updateCalendar config tcal = forever do
@@ -177,11 +201,11 @@ runDaemon tcal = Network.withSocketsDo do
         buffer <- Foreign.mallocBytes 1024
         size <- Network.recvBuf conn buffer 1024
         result <- TF.fromPtr buffer (toEnum size)
-        case TextRead.decimal result of
-            Left _ -> pure ()
-            Right (n, _) -> do
-                putStrLn $ "got update: " <> show n
-                STM.atomically $ STM.writeTVar tskip n
+        STM.atomically $ case textToRunMode result of
+            Next n -> STM.writeTVar tskip n
+            Inc -> STM.modifyTVar tskip (+ 1)
+            Dec -> STM.modifyTVar tskip (\k -> max 0 (k - 1))
+            Server -> pure ()
 
     sendUpdates :: STM.TChan C.Entry -> Network.Socket -> IO ()
     sendUpdates peerChannel conn = forever do
