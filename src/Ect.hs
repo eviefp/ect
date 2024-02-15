@@ -188,7 +188,6 @@ runDaemon tcal = Network.withSocketsDo do
     loop chan tskip socket = forever do
         E.bracketOnError (Network.accept socket) (Network.close . fst) $
             \(conn, _peer) -> void do
-                putStrLn "new client!"
                 peerChannel <- STM.atomically $ STM.dupTChan chan
                 Async.asyncWithUnmask \_ ->
                     Async.concurrently_
@@ -197,7 +196,6 @@ runDaemon tcal = Network.withSocketsDo do
 
     receiveSkipUpdates :: STM.TVar Int -> Network.Socket -> IO ()
     receiveSkipUpdates tskip conn = forever do
-        putStrLn "receiving updates... "
         buffer <- Foreign.mallocBytes 1024
         size <- Network.recvBuf conn buffer 1024
         result <- TF.fromPtr buffer (toEnum size)
@@ -231,7 +229,6 @@ runDaemon tcal = Network.withSocketsDo do
             let
                 result = C.getNth skip now cal
             when (lastResult /= result) do
-                putStrLn "diff!"
                 Ref.writeIORef lastResultRef result
                 lastSkip <- Ref.readIORef lastSkipRef
                 STM.atomically do
