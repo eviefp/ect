@@ -204,6 +204,7 @@ runDaemon tcal = Network.withSocketsDo do
             Inc -> STM.modifyTVar tskip (+ 1)
             Dec -> STM.modifyTVar tskip (\k -> max 0 (k - 1))
             Server -> pure ()
+        Conc.threadDelay 5_000_000
 
     sendUpdates :: STM.TChan C.Entry -> Network.Socket -> IO ()
     sendUpdates peerChannel conn = forever do
