@@ -199,10 +199,10 @@ runDaemon tcal = Network.withSocketsDo do
         buffer <- Foreign.mallocBytes 1024
         size <- Network.recvBuf conn buffer 1024
         result <- TF.fromPtr buffer (toEnum size)
-        STM.atomically $ case textToRunMode result of
-            Next n -> STM.writeTVar tskip n
-            Inc -> STM.modifyTVar tskip (+ 1)
-            Dec -> STM.modifyTVar tskip (\k -> max 0 (k - 1))
+        case textToRunMode result of
+            Next n -> STM.atomically $ STM.writeTVar tskip n
+            Inc -> STM.atomically $ STM.modifyTVar tskip (+ 1)
+            Dec -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
             Server -> pure ()
         Conc.threadDelay 5_000_000
 
