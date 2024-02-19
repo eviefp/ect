@@ -192,7 +192,7 @@ runDaemon tcal = Network.withSocketsDo do
                 Async.asyncWithUnmask \_ ->
                     Async.concurrently_
                         (receiveSkipUpdates tskip conn)
-                        (sendUpdates peerChannel conn)
+                        (sendUpdates peerChannel tskip conn)
 
     receiveSkipUpdates :: STM.TVar Int -> Network.Socket -> IO ()
     receiveSkipUpdates tskip conn = forever do
@@ -206,13 +206,25 @@ runDaemon tcal = Network.withSocketsDo do
             Server -> pure ()
         Conc.threadDelay 5_000_000
 
-    sendUpdates :: STM.TChan C.Entry -> Network.Socket -> IO ()
-    sendUpdates peerChannel conn = forever do
-        entity <- STM.atomically $ STM.readTChan peerChannel
+    sendEntry :: Network.Socket -> C.Entry -> IO ()
+    sendEntry conn entry = do
         let
-            result = T.decodeUtf8 . BS.toStrict . Aeson.encode $ entity
+            result = T.decodeUtf8 . BS.toStrict . Aeson.encode $ entry
         TF.useAsPtr (result <> "\n") $ \ptr len ->
-            Network.sendBuf conn ptr (fromEnum len)
+            void $ Network.sendBuf conn ptr (fromEnum len)
+
+    sendUpdates :: STM.TChan C.Entry -> TVar Int -> Network.Socket -> IO ()
+    sendUpdates peerChannel tskip conn = do
+        now <- C.now
+        entry' <- STM.atomically do
+            skip <- STM.readTVar tskip
+            cal <- STM.readTVar tcal
+            pure $ C.getNth skip now cal
+        maybe mempty (sendEntry conn) entry'
+
+        forever do
+            entry <- STM.atomically $ STM.readTChan peerChannel
+            sendEntry conn entry
 
     broadcastTimer :: STM.TChan C.Entry -> STM.TVar Int -> IO ()
     broadcastTimer broadcast tskip = do
