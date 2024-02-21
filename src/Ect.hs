@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Ect (main) where
 
@@ -29,6 +30,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.Foreign qualified as TF
+import Data.Text.IO qualified as T
 import Data.Text.Read qualified as TextRead
 import Data.Time qualified as Time
 import Data.Yaml qualified as Yaml
@@ -67,21 +69,26 @@ data RunMode
     | Inc
     | Dec
     | Server
+    | Upcoming !Int
 
-parseArgs :: [String] -> RunMode
+parseArgs :: [String] -> Maybe RunMode
 parseArgs = \case
-    ("--skip" : k : _) -> Next (fromMaybe 0 $ R.readMaybe k)
-    ("--up" : _) -> Inc
-    ("--down" : _) -> Dec
-    ("--server" : _) -> Server
-    _ -> Next 0
+    ["--skip"] -> Just $ Next 0
+    ["--skip", k] -> Just $ Next (fromMaybe 0 $ R.readMaybe k)
+    ["--up"] -> Just Inc
+    ["--down"] -> Just Dec
+    ["--server"] -> Just Server
+    ["--upcoming"] -> Just $ Upcoming 10
+    ["--upcoming", k] -> Just $ Upcoming (fromMaybe 10 $ R.readMaybe k)
+    _k -> Nothing
 
-runModeToText :: RunMode -> Text
+runModeToText :: RunMode -> Maybe Text
 runModeToText = \case
-    Server -> error "cannot print Server mode"
-    Next k -> T.pack $ show k <> "\n"
-    Inc -> "inc\n"
-    Dec -> "dec\n"
+    Server -> Nothing
+    Next k -> Just $ T.pack $ show k <> "\n"
+    Inc -> Just "inc\n"
+    Dec -> Just "dec\n"
+    Upcoming _ -> Nothing
 
 textToRunMode :: Text -> RunMode
 textToRunMode input =
@@ -106,12 +113,29 @@ eval runMode = do
             Async.concurrently_
                 (Async.concurrently_ (updateCalendar config calTvar) (runDaemon calTvar))
                 (runNotifications config calTvar)
+        Upcoming k -> processUpcoming cal k
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
             Network.connect socket $ Network.SockAddrUnix socketAddress
-            TF.useAsPtr (runModeToText rm) $ \ptr len ->
-                void $ Network.sendBuf socket ptr (fromEnum len)
-            Network.close socket
+            case runModeToText rm of
+                Nothing -> Network.close socket *> error "Internal error: unmatched run mode."
+                Just command -> do
+                    TF.useAsPtr command $ \ptr len ->
+                        void $ Network.sendBuf socket ptr (fromEnum len)
+                    Network.close socket
+
+processUpcoming :: C.Calendar -> Int -> IO ()
+processUpcoming cal n = do
+    now <- C.now
+    let
+        result =
+            -- List.groupWith (Time.localDay . C.entryStartTime)
+            fmap C.UpcomingEntry
+                . S.toAscList
+                . C.entriesAfter n (C.Entry mempty now Nothing)
+                . C.entries
+                $ cal
+    T.putStrLn . T.decodeUtf8 . BS.toStrict . Aeson.encode $ result
 
 updateCalendar :: EctConfig -> TVar C.Calendar -> IO ()
 updateCalendar config tcal = forever do
@@ -251,4 +275,7 @@ runDaemon tcal = Network.withSocketsDo do
 
 main :: IO ()
 main = do
-    Env.getArgs >>= eval . parseArgs
+    Env.getArgs >>= maybe showError eval . parseArgs
+
+showError :: IO ()
+showError = error "Could not parse input arguments."

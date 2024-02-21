@@ -5,6 +5,7 @@
 
 module Calendar
     ( Entry (..)
+    , UpcomingEntry (..)
     , Calendar
     , mkCalendar
     , entries
@@ -69,6 +70,28 @@ printTime = Time.formatTime Time.defaultTimeLocale "%H:%M"
 printDate :: Time.LocalTime -> String
 printDate = Time.formatTime Time.defaultTimeLocale "%Y-%m-%d"
 
+newtype UpcomingEntry = UpcomingEntry {getUpcomingEntry :: Entry}
+    deriving newtype (Eq)
+
+instance Aeson.ToJSON UpcomingEntry where
+    toJSON :: UpcomingEntry -> Aeson.Value
+    toJSON UpcomingEntry {getUpcomingEntry = Entry {..}} =
+        Aeson.object
+            [ "title" .= entryTitle
+            , "time" .= printTime entryStartTime
+            , "date" .= printUpcomingDate entryStartTime
+            ]
+
+    toEncoding :: UpcomingEntry -> Aeson.Encoding
+    toEncoding UpcomingEntry {getUpcomingEntry = Entry {..}} =
+        Aeson.pairs $
+            "title" .= entryTitle
+                <> "time" .= printTime entryStartTime
+                <> "date" .= printUpcomingDate entryStartTime
+
+printUpcomingDate :: Time.LocalTime -> String
+printUpcomingDate = Time.formatTime Time.defaultTimeLocale "%A, %d %b"
+
 newtype Calendar = Calendar (Set Entry)
 
 entries :: Calendar -> Set Entry
@@ -98,7 +121,7 @@ sectionToEntry section@Org.OrgSection {..} =
         (x : xs) ->
             case Org.elementData x of
                 Org.Paragraph paragraphs -> findDatesInParagraphs paragraphs
-                _ -> findEntryStartTime xs
+                _o -> findEntryStartTime xs
 
     findDatesInParagraphs :: [Org.OrgObject] -> Maybe Time.LocalTime
     findDatesInParagraphs = \case
@@ -107,7 +130,7 @@ sectionToEntry section@Org.OrgSection {..} =
             case x of
                 Org.Timestamp (Org.TimestampData _ dt) -> parseTimestampData dt
                 Org.Timestamp (Org.TimestampRange _ dt _) -> parseTimestampData dt
-                _ -> findDatesInParagraphs xs
+                _o -> findDatesInParagraphs xs
 
     parseTimestampData :: Org.DateTime -> Maybe Time.LocalTime
     parseTimestampData ((y, m, d, _), mtime, _, _) = do

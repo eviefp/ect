@@ -18,9 +18,9 @@
   - [X] date/day
   - [X] use a different date/time library ffs
 
-- [ ] v0.4 (window)
-  - [ ] next n items
-  - [ ] details
+- [X] v0.4 (window)
+  - [X] next n items
+  - [X] details
 
 - [ ] more
   - [ ] add new (?)
