@@ -62,6 +62,7 @@ library
     exposed-modules: Ect
                    , IQL
                    , Calendar
+                   , Exporter
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -76,14 +77,15 @@ library
                     , async-timer
                     , bytestring
                     , containers
+                    , data-default
                     , directory
+                    , iCalendar
                     , iso8601-time
                     , network
                     , org-parser
                     , process
                     , stm
                     , text
-                    , time
                     , time
                     , unbounded-delays
                     , yaml

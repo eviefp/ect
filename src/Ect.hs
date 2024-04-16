@@ -1,6 +1,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
@@ -34,6 +36,7 @@ import Data.Text.IO qualified as T
 import Data.Text.Read qualified as TextRead
 import Data.Time qualified as Time
 import Data.Yaml qualified as Yaml
+import Exporter qualified
 import Foreign qualified
 import GHC.Generics (Generic)
 import Network.Socket qualified as Network
@@ -53,9 +56,19 @@ data EctNotificationConfig = EctNotificationConfig
 
 instance Aeson.FromJSON EctNotificationConfig
 
+data EctExportConfig = EctExportConfig
+    { enable :: !Bool
+    , calendars :: ![Text]
+    , output :: !Text
+    }
+    deriving stock (Generic)
+
+instance Aeson.FromJSON EctExportConfig
+
 data EctConfig = EctConfig
     { calendars :: ![Text]
     , notification :: !EctNotificationConfig
+    , export :: !EctExportConfig
     }
     deriving stock (Generic)
 
@@ -106,13 +119,17 @@ textToRunMode input =
 eval :: RunMode -> IO ()
 eval runMode = do
     config <- Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath >>= Yaml.decodeFileThrow
-    cal <- C.mkCalendar (T.unpack <$> calendars config)
+    cal <- C.mkCalendar (T.unpack <$> config.calendars)
     case runMode of
         Server -> do
             calTvar <- STM.newTVarIO cal
-            Async.concurrently_
-                (Async.concurrently_ (updateCalendar config calTvar) (runDaemon calTvar))
-                (runNotifications config calTvar)
+            Async.mapConcurrently_
+                id
+                [ updateCalendar config calTvar
+                , runDaemon calTvar
+                , runNotifications config calTvar
+                , runExporter (export config)
+                ]
         Upcoming k -> processUpcoming cal k
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
@@ -139,7 +156,7 @@ processUpcoming cal n = do
 
 updateCalendar :: EctConfig -> TVar C.Calendar -> IO ()
 updateCalendar config tcal = forever do
-    cal <- C.mkCalendar (T.unpack <$> calendars config)
+    cal <- C.mkCalendar (T.unpack <$> config.calendars)
     STM.atomically . STM.writeTVar tcal $ cal
     Conc.threadDelay 60_000_000 -- one minute
 
@@ -272,6 +289,12 @@ runDaemon tcal = Network.withSocketsDo do
                     when (lastSkip == skip) $ STM.writeTVar tskip (max 0 (skip - 1))
                     STM.writeTChan broadcast (fromMaybe (C.Entry "Calendar is empty." now Nothing) result)
                 Ref.writeIORef lastSkipRef skip
+
+runExporter :: EctExportConfig -> IO ()
+runExporter EctExportConfig {..} =
+    when enable $ forever do
+        Exporter.exportFiles (T.unpack <$> calendars) (T.unpack output)
+        Conc.threadDelay $ 1_000_000 * 60 * 10 -- 10 minutes
 
 main :: IO ()
 main = do
