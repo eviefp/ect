@@ -2,5 +2,5 @@ packages: ect.cabal
 
 source-repository-package
   type: git
-  location: https://github.com/eviefp/iCalendar
-  tag: 3dfe215ee1b382e4b14264fc897fbbd0c9774319
+  location: https://github.com/centralapp/iCalendar
+  tag: 0858aa2ed64bc5357e943ab1e1327721e24b566d
