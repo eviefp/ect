@@ -116,7 +116,7 @@ toCalendarFormat events now = C.VCalendar {..}
                                             C.Recur
                                                 { C.recurFreq = C.Yearly
                                                 , C.recurUntilCount = Nothing
-                                                , C.recurInterval = 0
+                                                , C.recurInterval = 1
                                                 , C.recurBySecond = []
                                                 , C.recurByMinute = []
                                                 , C.recurByHour = []
@@ -126,7 +126,7 @@ toCalendarFormat events now = C.VCalendar {..}
                                                 , C.recurByWeekNo = []
                                                 , C.recurByMonth = [10]
                                                 , C.recurBySetPos = []
-                                                , C.recurWkSt = C.Sunday
+                                                , C.recurWkSt = C.Monday
                                                 }
                                         , C.rRuleOther = def
                                         }
@@ -174,7 +174,7 @@ toCalendarFormat events now = C.VCalendar {..}
                                             C.Recur
                                                 { C.recurFreq = C.Yearly
                                                 , C.recurUntilCount = Nothing
-                                                , C.recurInterval = 0
+                                                , C.recurInterval = 1
                                                 , C.recurBySecond = []
                                                 , C.recurByMinute = []
                                                 , C.recurByHour = []
@@ -184,7 +184,7 @@ toCalendarFormat events now = C.VCalendar {..}
                                                 , C.recurByWeekNo = []
                                                 , C.recurByMonth = [3]
                                                 , C.recurBySetPos = []
-                                                , C.recurWkSt = C.Sunday
+                                                , C.recurWkSt = C.Monday
                                                 }
                                         , C.rRuleOther = def
                                         }
