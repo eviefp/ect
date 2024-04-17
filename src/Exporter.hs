@@ -340,5 +340,5 @@ entryToEvent now Entry {..} =
     )
   where
     startTimeText = T.pack $ show entryStartTime
-    hash = H.hash $ startTimeText <> T.fromStrict entryTitle
+    hash = abs $ H.hash $ startTimeText <> T.fromStrict entryTitle
     uid = T.pack (show hash) <> "@calendar.eevie.ro"
