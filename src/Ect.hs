@@ -131,10 +131,10 @@ eval runMode = do
                 [ updateCalendar config calTvar
                 , runDaemon calTvar
                 , runNotifications config calTvar
-                , runExporter (export config)
+                , exporterLoop (export config)
                 ]
         Upcoming k -> processUpcoming cal k
-        Export -> runExporter (export config)
+        Export -> runExport (export config)
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
             Network.connect socket $ Network.SockAddrUnix socketAddress
@@ -153,7 +153,7 @@ processUpcoming cal n = do
             -- List.groupWith (Time.localDay . C.entryStartTime)
             fmap C.UpcomingEntry
                 . S.toAscList
-                . C.entriesAfter n (C.Entry mempty now Nothing)
+                . C.entriesAfter n (C.Entry mempty now Nothing Nothing)
                 . C.entries
                 $ cal
     T.putStrLn . T.decodeUtf8 . BS.toStrict . Aeson.encode $ result
@@ -171,7 +171,7 @@ runNotifications config tcal = do
         now <- C.now
         cal <- STM.readTVarIO tcal
         let
-            newEntries = S.toList . C.entriesAfter numThreads (C.Entry mempty now Nothing) . C.entries $ cal
+            newEntries = S.toList . C.entriesAfter numThreads (C.Entry mempty now Nothing Nothing) . C.entries $ cal
         newThreads <- Ref.readIORef threads >>= flip (mkNewThreadsMap now) newEntries
         Ref.writeIORef threads newThreads
 
@@ -291,14 +291,18 @@ runDaemon tcal = Network.withSocketsDo do
                 lastSkip <- Ref.readIORef lastSkipRef
                 STM.atomically do
                     when (lastSkip == skip) $ STM.writeTVar tskip (max 0 (skip - 1))
-                    STM.writeTChan broadcast (fromMaybe (C.Entry "Calendar is empty." now Nothing) result)
+                    STM.writeTChan broadcast (fromMaybe (C.Entry "Calendar is empty." now Nothing Nothing) result)
                 Ref.writeIORef lastSkipRef skip
 
-runExporter :: EctExportConfig -> IO ()
-runExporter EctExportConfig {..} =
-    when enable $ forever do
-        Exporter.exportFiles (T.unpack <$> calendars) (T.unpack output)
+exporterLoop :: EctExportConfig -> IO ()
+exporterLoop config =
+    when config.enable $ forever do
+        runExport config
         Conc.threadDelay $ 1_000_000 * 60 * 10 -- 10 minutes
+
+runExport :: EctExportConfig -> IO ()
+runExport EctExportConfig {..} =
+    Exporter.exportFiles (T.unpack <$> calendars) (T.unpack output)
 
 main :: IO ()
 main = do

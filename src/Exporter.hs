@@ -11,6 +11,7 @@ import Data.Default (def)
 import Data.Hashable qualified as H
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text.Lazy (Text)
@@ -309,17 +310,19 @@ entryToEvent now Entry {..} =
         , C.veUrl = Nothing
         , C.veRecurId = Nothing
         , C.veRRule = Set.empty
-        , C.veDTEndDuration -- TODO: we don't store these in org events
-          =
+        , C.veDTEndDuration =
             Just $
                 Left
                     C.DTEndDateTime
                         { C.dtEndDateTimeValue =
                             C.ZonedDateTime
                                 { C.dateTimeFloating =
-                                    T.addLocalTime
-                                        (T.secondsToNominalDiffTime 3600)
-                                        entryStartTime
+                                    fromMaybe
+                                        ( T.addLocalTime
+                                            (T.secondsToNominalDiffTime 3600)
+                                            entryStartTime
+                                        )
+                                        entryEndTime
                                 , C.dateTimeZone = "Europe/Bucharest"
                                 }
                         , C.dtEndOther = def

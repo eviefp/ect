@@ -19,7 +19,7 @@ import Control.Monad.IO.Class qualified as IO
 import Data.Aeson ((.=))
 import Data.Aeson qualified as Aeson
 import Data.Function (on)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -35,11 +35,12 @@ now = Time.zonedTimeToLocalTime <$> IO.liftIO Time.getZonedTime
 
 getNth :: Int -> Time.LocalTime -> Calendar -> Maybe Entry
 getNth n now' =
-    (Set.lookupMin . Set.drop n . snd . Set.split (Entry mempty now' Nothing)) . entries
+    (Set.lookupMin . Set.drop n . snd . Set.split (Entry mempty now' Nothing Nothing)) . entries
 
 data Entry = Entry
     { entryTitle :: !Text
     , entryStartTime :: !Time.LocalTime
+    , entryEndTime :: !(Maybe Time.LocalTime)
     , entrySection :: !(Maybe Org.OrgSection)
     }
     deriving stock (Eq, Generic)
@@ -55,6 +56,8 @@ instance Aeson.ToJSON Entry where
             [ "title" .= entryTitle
             , "time" .= printTime entryStartTime
             , "date" .= printDate entryStartTime
+            , "duration"
+                .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
             ]
 
     toEncoding :: Entry -> Aeson.Encoding
@@ -63,6 +66,8 @@ instance Aeson.ToJSON Entry where
             "title" .= entryTitle
                 <> "time" .= printTime entryStartTime
                 <> "date" .= printDate entryStartTime
+                <> "duration"
+                    .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
 
 printTime :: Time.LocalTime -> String
 printTime = Time.formatTime Time.defaultTimeLocale "%H:%M"
@@ -80,6 +85,8 @@ instance Aeson.ToJSON UpcomingEntry where
             [ "title" .= entryTitle
             , "time" .= printTime entryStartTime
             , "date" .= printUpcomingDate entryStartTime
+            , "duration"
+                .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
             ]
 
     toEncoding :: UpcomingEntry -> Aeson.Encoding
@@ -88,6 +95,8 @@ instance Aeson.ToJSON UpcomingEntry where
             "title" .= entryTitle
                 <> "time" .= printTime entryStartTime
                 <> "date" .= printUpcomingDate entryStartTime
+                <> "duration"
+                    .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
 
 printUpcomingDate :: Time.LocalTime -> String
 printUpcomingDate = Time.formatTime Time.defaultTimeLocale "%A, %d %b"
@@ -108,29 +117,29 @@ sectionToEntry :: Org.OrgSection -> Maybe Entry
 sectionToEntry section@Org.OrgSection {..} =
     case findEntryStartTime sectionChildren of
         Nothing -> Nothing
-        Just entryStartTime ->
+        Just (entryStartTime, entryEndTime) ->
             Just $ Entry {..}
   where
     entryTitle = sectionRawTitle
 
     entrySection = Just section
 
-    findEntryStartTime :: [Org.OrgElement] -> Maybe Time.LocalTime
+    findEntryStartTime :: [Org.OrgElement] -> Maybe (Time.LocalTime, Maybe Time.LocalTime)
     findEntryStartTime = \case
         [] -> Nothing
         (x : xs) ->
             case Org.elementData x of
                 Org.Paragraph paragraphs -> findDatesInParagraphs paragraphs
-                _o -> findEntryStartTime xs
+                _otherwise -> findEntryStartTime xs
 
-    findDatesInParagraphs :: [Org.OrgObject] -> Maybe Time.LocalTime
+    findDatesInParagraphs :: [Org.OrgObject] -> Maybe (Time.LocalTime, Maybe Time.LocalTime)
     findDatesInParagraphs = \case
         [] -> Nothing
         (x : xs) ->
             case x of
-                Org.Timestamp (Org.TimestampData _ dt) -> parseTimestampData dt
-                Org.Timestamp (Org.TimestampRange _ dt _) -> parseTimestampData dt
-                _o -> findDatesInParagraphs xs
+                Org.Timestamp (Org.TimestampData _ start) -> (,Nothing) <$> parseTimestampData start
+                Org.Timestamp (Org.TimestampRange _ start end) -> (,parseTimestampData end) <$> parseTimestampData start
+                _otherwise -> findDatesInParagraphs xs
 
     parseTimestampData :: Org.DateTime -> Maybe Time.LocalTime
     parseTimestampData ((y, m, d, _), mtime, _, _) = do
