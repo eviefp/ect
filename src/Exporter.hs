@@ -8,6 +8,7 @@ module Exporter
 import Calendar (Calendar, Entry (..), entries, mkCalendar)
 import Data.ByteString.Lazy qualified as BS
 import Data.Default (def)
+import Data.Hashable qualified as H
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -16,6 +17,7 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy qualified as T
 import Data.Time.Calendar qualified as T
 import Data.Time.Clock qualified as T
+import Data.Time.LocalTime qualified as T
 import Data.Version qualified as Version
 import Text.ICalendar.Printer qualified as C
 import Text.ICalendar.Types qualified as C
@@ -217,7 +219,6 @@ toCalendarFormat events now = C.VCalendar {..}
     vcEvents =
         Map.fromList
             . fmap (entryToEvent now)
-            . zip [0 ..]
             . Set.toList
             $ entries events
 
@@ -233,8 +234,8 @@ toCalendarFormat events now = C.VCalendar {..}
     vcOtherComps :: Set C.VOther
     vcOtherComps = mempty
 
-entryToEvent :: T.UTCTime -> (Int, Entry) -> ((Text, Maybe (Either C.Date C.DateTime)), C.VEvent)
-entryToEvent now (i, Entry {..}) =
+entryToEvent :: T.UTCTime -> Entry -> ((Text, Maybe (Either C.Date C.DateTime)), C.VEvent)
+entryToEvent now Entry {..} =
     ( (uid, Nothing)
     , C.VEvent
         { C.veDTStamp =
@@ -244,12 +245,12 @@ entryToEvent now (i, Entry {..}) =
                 }
         , C.veUID =
             C.UID
-                { C.uidValue = uid
+                { C.uidValue = uid -- hash?
                 , C.uidOther = def
                 }
         , C.veClass =
             C.Class
-                { C.classValue = C.Private
+                { C.classValue = C.Public
                 , C.classOther = def
                 }
         , C.veDTStart =
@@ -262,10 +263,20 @@ entryToEvent now (i, Entry {..}) =
                             }
                     , C.dtStartOther = def
                     }
-        , C.veCreated = Nothing
+        , C.veCreated =
+            Just
+                C.Created
+                    { C.createdValue = now
+                    , C.createdOther = def
+                    }
         , C.veDescription = Nothing
         , C.veGeo = Nothing
-        , C.veLastMod = Nothing
+        , C.veLastMod =
+            Just
+                C.LastModified
+                    { C.lastModifiedValue = now
+                    , C.lastModifiedOther = def
+                    }
         , C.veLocation = Nothing
         , C.veOrganizer = Nothing
         , C.vePriority =
@@ -278,7 +289,11 @@ entryToEvent now (i, Entry {..}) =
                 { C.sequenceValue = 0
                 , C.sequenceOther = def
                 }
-        , C.veStatus = Nothing
+        , C.veStatus =
+            Just
+                C.ConfirmedEvent
+                    { C.eventStatusOther = def
+                    }
         , C.veSummary =
             Just
                 C.Summary
@@ -288,7 +303,7 @@ entryToEvent now (i, Entry {..}) =
                     , C.summaryOther = def
                     }
         , C.veTransp =
-            C.Transparent
+            C.Opaque
                 { C.timeTransparencyOther = def
                 }
         , C.veUrl = Nothing
@@ -297,16 +312,17 @@ entryToEvent now (i, Entry {..}) =
         , C.veDTEndDuration -- TODO: we don't store these in org events
           =
             Just $
-                Right
-                    C.DurationProp
-                        { C.durationValue =
-                            C.DurationTime
-                                { C.durSign = C.Positive
-                                , C.durHour = 1
-                                , C.durMinute = 0
-                                , C.durSecond = 0
+                Left
+                    C.DTEndDateTime
+                        { C.dtEndDateTimeValue =
+                            C.ZonedDateTime
+                                { C.dateTimeFloating =
+                                    T.addLocalTime
+                                        (T.secondsToNominalDiffTime 3600)
+                                        entryStartTime
+                                , C.dateTimeZone = "Europe/Bucharest"
                                 }
-                        , C.durationOther = def
+                        , C.dtEndOther = def
                         }
         , C.veAttach = Set.empty
         , C.veAttendee = Set.empty
@@ -323,4 +339,6 @@ entryToEvent now (i, Entry {..}) =
         }
     )
   where
-    uid = T.pack (show i) <> "@calendar.eevie.ro"
+    startTimeText = T.pack $ show entryStartTime
+    hash = H.hash $ startTimeText <> T.fromStrict entryTitle
+    uid = T.pack (show hash) <> "@calendar.eevie.ro"

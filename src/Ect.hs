@@ -83,6 +83,7 @@ data RunMode
     | Dec
     | Server
     | Upcoming !Int
+    | Export
 
 parseArgs :: [String] -> Maybe RunMode
 parseArgs = \case
@@ -93,6 +94,7 @@ parseArgs = \case
     ["--server"] -> Just Server
     ["--upcoming"] -> Just $ Upcoming 10
     ["--upcoming", k] -> Just $ Upcoming (fromMaybe 10 $ R.readMaybe k)
+    ["--export"] -> Just Export
     _k -> Nothing
 
 runModeToText :: RunMode -> Maybe Text
@@ -102,6 +104,7 @@ runModeToText = \case
     Inc -> Just "inc\n"
     Dec -> Just "dec\n"
     Upcoming _ -> Nothing
+    Export -> Nothing
 
 textToRunMode :: Text -> RunMode
 textToRunMode input =
@@ -131,6 +134,7 @@ eval runMode = do
                 , runExporter (export config)
                 ]
         Upcoming k -> processUpcoming cal k
+        Export -> runExporter (export config)
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
             Network.connect socket $ Network.SockAddrUnix socketAddress

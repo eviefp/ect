@@ -79,6 +79,7 @@ library
                     , containers
                     , data-default
                     , directory
+                    , hashable
                     , iCalendar
                     , iso8601-time
                     , network
