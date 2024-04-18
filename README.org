@@ -1,27 +1,22 @@
 * TODO
 
-- [X] next thing
-  - [X] write a "now" date
-  - [X] see if that just works regardless of type of timestamp
-  - [X] figure out timestamps
-- [X] v0.1
-  - [X] cli arguments
-  - [X] package
+- [-] parse ics to org here
+  - [X] parse ics
+  - [X] check out org agenda syntax
+    - [X] groups?
+    - [X] drawers?
+    - [X] config?
+    - [X] sections?
+  - [-] output as org
+    - [X] output to temp files
+    - [ ] replace old config to new config in code
+    - [ ] nix config changes
+  - [ ] remaining fields
 
-- [X] v0.2 (basic bar features)
-  - [X] produce json
-  - [X] next but skip n
+- [ ] exporter update with new fields!
 
-- [X] v0.3 (notifications)
-  - [X] socket mode?
-  - [X] notification!
-  - [X] date/day
-  - [X] use a different date/time library ffs
+- [ ] template for new agenda item
 
-- [X] v0.4 (window)
-  - [X] next n items
-  - [X] details
+- [ ] duration export in a reasonable format
 
-- [ ] more
-  - [ ] add new (?)
-  - [ ] remove (?)
+- [ ] ect new, writes to local?

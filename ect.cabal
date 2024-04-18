@@ -63,6 +63,8 @@ library
                    , IQL
                    , Calendar
                    , Exporter
+                   , Importer
+                   , Config
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -82,9 +84,11 @@ library
                     , hashable
                     , iCalendar
                     , iso8601-time
+                    , modern-uri
                     , network
                     , org-parser
                     , process
+                    , wreq
                     , stm
                     , text
                     , time

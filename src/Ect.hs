@@ -39,6 +39,7 @@ import Data.Yaml qualified as Yaml
 import Exporter qualified
 import Foreign qualified
 import GHC.Generics (Generic)
+import Importer qualified
 import Network.Socket qualified as Network
 import System.Directory qualified as Dir
 import System.Environment qualified as Env
@@ -84,6 +85,7 @@ data RunMode
     | Server
     | Upcoming !Int
     | Export
+    | Import
 
 parseArgs :: [String] -> Maybe RunMode
 parseArgs = \case
@@ -95,6 +97,7 @@ parseArgs = \case
     ["--upcoming"] -> Just $ Upcoming 10
     ["--upcoming", k] -> Just $ Upcoming (fromMaybe 10 $ R.readMaybe k)
     ["--export"] -> Just Export
+    ["--import"] -> Just Import
     _k -> Nothing
 
 runModeToText :: RunMode -> Maybe Text
@@ -105,6 +108,7 @@ runModeToText = \case
     Dec -> Just "dec\n"
     Upcoming _ -> Nothing
     Export -> Nothing
+    Import -> Nothing
 
 textToRunMode :: Text -> RunMode
 textToRunMode input =
@@ -135,6 +139,9 @@ eval runMode = do
                 ]
         Upcoming k -> processUpcoming cal k
         Export -> runExport (export config)
+        Import -> do
+            _ <- Importer.importFiles
+            pure ()
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
             Network.connect socket $ Network.SockAddrUnix socketAddress
