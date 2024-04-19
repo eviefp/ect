@@ -1,17 +1,19 @@
 * TODO
 
-- [-] parse ics to org here
+- [X] parse ics to org here
   - [X] parse ics
   - [X] check out org agenda syntax
     - [X] groups?
     - [X] drawers?
     - [X] config?
     - [X] sections?
-  - [-] output as org
+  - [X] output as org
     - [X] output to temp files
-    - [ ] replace old config to new config in code
-    - [ ] nix config changes
-  - [ ] remaining fields
+    - [X] parsing
+    - [X] replace old config to new config in code
+    - [X] nix config changes
+
+- [ ] remaining fields
 
 - [ ] exporter update with new fields!
 

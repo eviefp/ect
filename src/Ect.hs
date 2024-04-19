@@ -10,6 +10,10 @@
 module Ect (main) where
 
 import Calendar qualified as C
+import Config qualified
+import Exporter qualified
+import Foreign qualified
+import Importer qualified
 
 import Control.Concurrent qualified as Conc
 import Control.Concurrent.Async (Async)
@@ -19,6 +23,7 @@ import Control.Concurrent.STM.TVar (TVar)
 import Control.Concurrent.Thread.Delay qualified as Delays
 import Control.Exception qualified as E
 import Control.Monad (forever, when)
+
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as BS
 import Data.Fixed qualified as Time
@@ -27,7 +32,6 @@ import Data.IORef qualified as Ref
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -35,48 +39,14 @@ import Data.Text.Foreign qualified as TF
 import Data.Text.IO qualified as T
 import Data.Text.Read qualified as TextRead
 import Data.Time qualified as Time
-import Data.Yaml qualified as Yaml
-import Exporter qualified
-import Foreign qualified
-import GHC.Generics (Generic)
-import Importer qualified
+
 import Network.Socket qualified as Network
-import System.Directory qualified as Dir
 import System.Environment qualified as Env
 import System.Process qualified as Process
 import Text.Read qualified as R
 
 socketAddress :: String
 socketAddress = "/tmp/ect/ect.socket.sock"
-
-data EctNotificationConfig = EctNotificationConfig
-    { exec :: !Text
-    , threads :: !Int
-    }
-    deriving stock (Generic)
-
-instance Aeson.FromJSON EctNotificationConfig
-
-data EctExportConfig = EctExportConfig
-    { enable :: !Bool
-    , calendars :: ![Text]
-    , output :: !Text
-    }
-    deriving stock (Generic)
-
-instance Aeson.FromJSON EctExportConfig
-
-data EctConfig = EctConfig
-    { calendars :: ![Text]
-    , notification :: !EctNotificationConfig
-    , export :: !EctExportConfig
-    }
-    deriving stock (Generic)
-
-instance Aeson.FromJSON EctConfig
-
-defaultConfigPath :: FilePath
-defaultConfigPath = "ect/ect.yaml"
 
 data RunMode
     = Next !Int
@@ -125,8 +95,12 @@ textToRunMode input =
 
 eval :: RunMode -> IO ()
 eval runMode = do
-    config <- Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath >>= Yaml.decodeFileThrow
-    cal <- C.mkCalendar (T.unpack <$> config.calendars)
+    config <- Config.getConfig
+    let
+        importedCalendars = T.unpack . Config.outputPath <$> config.calendars
+        localCalendars = T.unpack <$> config.export.extraCalendars
+    cal <-
+        C.mkCalendar $ importedCalendars <> localCalendars
     case runMode of
         Server -> do
             calTvar <- STM.newTVarIO cal
@@ -135,12 +109,12 @@ eval runMode = do
                 [ updateCalendar config calTvar
                 , runDaemon calTvar
                 , runNotifications config calTvar
-                , exporterLoop (export config)
+                , exporterLoop config
                 ]
         Upcoming k -> processUpcoming cal k
-        Export -> runExport (export config)
+        Export -> runExport config
         Import -> do
-            _ <- Importer.importFiles
+            _ <- Importer.importFiles config.calendars
             pure ()
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
@@ -156,39 +130,37 @@ processUpcoming :: C.Calendar -> Int -> IO ()
 processUpcoming cal n = do
     now <- C.now
     let
-        result =
-            -- List.groupWith (Time.localDay . C.entryStartTime)
-            fmap C.UpcomingEntry
-                . S.toAscList
-                . C.entriesAfter n (C.Entry mempty now Nothing Nothing)
-                . C.entries
-                $ cal
+        result = fmap C.UpcomingEntry . C.entriesAfter n now $ cal
     T.putStrLn . T.decodeUtf8 . BS.toStrict . Aeson.encode $ result
 
-updateCalendar :: EctConfig -> TVar C.Calendar -> IO ()
+updateCalendar :: Config.EctConfig -> TVar C.Calendar -> IO ()
 updateCalendar config tcal = forever do
-    cal <- C.mkCalendar (T.unpack <$> config.calendars)
+    let
+        importedCalendars = T.unpack . Config.outputPath <$> config.calendars
+        localCalendars = T.unpack <$> config.export.extraCalendars
+    cal <-
+        C.mkCalendar $ importedCalendars <> localCalendars
     STM.atomically . STM.writeTVar tcal $ cal
     Conc.threadDelay 60_000_000 -- one minute
 
-runNotifications :: EctConfig -> TVar C.Calendar -> IO ()
+runNotifications :: Config.EctConfig -> TVar C.Calendar -> IO ()
 runNotifications config tcal = do
     threads <- Ref.newIORef Map.empty
     forever do
         now <- C.now
         cal <- STM.readTVarIO tcal
         let
-            newEntries = S.toList . C.entriesAfter numThreads (C.Entry mempty now Nothing Nothing) . C.entries $ cal
+            newEntries = C.entriesAfter numThreads now cal
         newThreads <- Ref.readIORef threads >>= flip (mkNewThreadsMap now) newEntries
         Ref.writeIORef threads newThreads
 
         Conc.threadDelay 60_000_000
   where
     numThreads :: Int
-    numThreads = threads . notification $ config
+    numThreads = Config.threads . Config.notification $ config
 
     notificationSetting :: Text
-    notificationSetting = exec . notification $ config
+    notificationSetting = Config.exec . Config.notification $ config
 
     needle :: Text
     needle = "{title}"
@@ -271,7 +243,7 @@ runDaemon tcal = Network.withSocketsDo do
         entry' <- STM.atomically do
             skip <- STM.readTVar tskip
             cal <- STM.readTVar tcal
-            pure $ C.getNth skip now cal
+            pure $ safeLast $ C.entriesAfter (skip + 1) now cal
         maybe mempty (sendEntry conn) entry'
 
         forever do
@@ -282,7 +254,7 @@ runDaemon tcal = Network.withSocketsDo do
     broadcastTimer broadcast tskip = do
         initialNow <- C.now
         initialCal <- STM.readTVarIO tcal
-        lastResultRef <- Ref.newIORef $ C.getNth 0 initialNow initialCal
+        lastResultRef <- Ref.newIORef $ safeLast $ C.entriesAfter 1 initialNow initialCal
         lastSkipRef <- Ref.newIORef 0
 
         forever do
@@ -292,24 +264,36 @@ runDaemon tcal = Network.withSocketsDo do
             lastResult <- Ref.readIORef lastResultRef
             skip <- STM.readTVarIO tskip
             let
-                result = C.getNth skip now cal
+                result = safeLast $ C.entriesAfter (skip + 1) now cal
             when (lastResult /= result) do
                 Ref.writeIORef lastResultRef result
                 lastSkip <- Ref.readIORef lastSkipRef
                 STM.atomically do
                     when (lastSkip == skip) $ STM.writeTVar tskip (max 0 (skip - 1))
-                    STM.writeTChan broadcast (fromMaybe (C.Entry "Calendar is empty." now Nothing Nothing) result)
+                    STM.writeTChan broadcast C.emptyEntry
                 Ref.writeIORef lastSkipRef skip
 
-exporterLoop :: EctExportConfig -> IO ()
+safeLast :: [C.Entry] -> Maybe C.Entry
+safeLast =
+    \case
+        [] -> Nothing
+        [x] -> Just x
+        (_ : xs) -> safeLast xs
+
+exporterLoop :: Config.EctConfig -> IO ()
 exporterLoop config =
-    when config.enable $ forever do
+    when config.export.enable $ forever do
         runExport config
         Conc.threadDelay $ 1_000_000 * 60 * 10 -- 10 minutes
 
-runExport :: EctExportConfig -> IO ()
-runExport EctExportConfig {..} =
-    Exporter.exportFiles (T.unpack <$> calendars) (T.unpack output)
+runExport :: Config.EctConfig -> IO ()
+runExport Config.EctConfig {..} =
+    let
+        shouldExportCalendars = (T.unpack . Config.outputPath <$> filter Config.shouldExport calendars)
+    in
+        Exporter.exportFiles
+            (shouldExportCalendars <> fmap T.unpack export.extraCalendars)
+            (T.unpack $ Config.output export)
 
 main :: IO ()
 main = do

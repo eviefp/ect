@@ -60,7 +60,6 @@ library
 
     -- Modules exported by the library.
     exposed-modules: Ect
-                   , IQL
                    , Calendar
                    , Exporter
                    , Importer
@@ -88,11 +87,11 @@ library
                     , network
                     , org-parser
                     , process
-                    , wreq
                     , stm
                     , text
                     , time
                     , unbounded-delays
+                    , wreq
                     , yaml
 
     -- Directories containing source files.

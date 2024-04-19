@@ -5,7 +5,8 @@ module Exporter
     ( exportFiles
     ) where
 
-import Calendar (Calendar, Entry (..), entries, mkCalendar)
+import Calendar (Calendar (..), Entry (..), mkCalendar)
+
 import Data.ByteString.Lazy qualified as BS
 import Data.Default (def)
 import Data.Hashable qualified as H
@@ -20,6 +21,7 @@ import Data.Time.Calendar qualified as T
 import Data.Time.Clock qualified as T
 import Data.Time.LocalTime qualified as T
 import Data.Version qualified as Version
+
 import Text.ICalendar.Printer qualified as C
 import Text.ICalendar.Types qualified as C
 
@@ -220,8 +222,7 @@ toCalendarFormat events now = C.VCalendar {..}
     vcEvents =
         Map.fromList
             . fmap (entryToEvent now)
-            . Set.toList
-            $ entries events
+            $ calendarEntries events
 
     vcTodos :: Map (Text, Maybe (Either C.Date C.DateTime)) C.VTodo
     vcTodos = mempty

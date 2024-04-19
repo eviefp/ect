@@ -24,37 +24,14 @@ import Data.Text.Lazy.IO qualified as T
 import Data.Time.Clock qualified as Clock
 import Data.Time.Format qualified as Time
 import Data.Time.LocalTime qualified as Time
+
 import Network.Wreq qualified as Wreq
+
 import Text.ICalendar.Parser qualified as CalParser
 import Text.ICalendar.Types qualified as C
 
-testConfig :: [Config.EctCalendarConfig]
-testConfig =
-    [ Config.EctCalendarConfig
-        { Config.name = "evie"
-        , Config.inputUrl =
-            "https://calendar.google.com/calendar/ical/alexaeviest%40gmail.com/private-18b1e7d8a6f6e36d9785321c45b5f249/basic.ics"
-        , Config.outputPath = "./test/evie.org"
-        , Config.shouldExport = False
-        }
-    , Config.EctCalendarConfig
-        { Config.name = "gia-evie"
-        , Config.inputUrl =
-            "https://calendar.google.com/calendar/ical/s810p67l2bi1168j8luka5nic0%40group.calendar.google.com/private-65e582415f3a020468b41cd5a94e0dee/basic.ics"
-        , Config.outputPath = "./test/gia-evie.org"
-        , Config.shouldExport = False
-        }
-    , Config.EctCalendarConfig
-        { Config.name = "proton"
-        , Config.inputUrl =
-            "https://calendar.proton.me/api/calendar/v1/url/vS55jZbaHpS1tE80KarCJpkJJ_ukgKGcsw_HpLnRXX1vgkLAEumSnR1JNJkcPCu3aZ0iEnysujzcbaFw1g3c4w==/calendar.ics?CacheKey=QQLJfxqoMKM2YM85uIaF7g%3D%3D&PassphraseKey=Og_-Aimhwq7Z6BRCMLPnttwCQypQPQy2U2GjYzvT74U%3D"
-        , Config.outputPath = "./test/proton.org"
-        , Config.shouldExport = False
-        }
-    ]
-
-importFiles :: IO ()
-importFiles = traverse_ importFile testConfig
+importFiles :: [Config.EctCalendarConfig] -> IO ()
+importFiles = traverse_ importFile
 
 importFile :: Config.EctCalendarConfig -> IO (Either String ())
 importFile Config.EctCalendarConfig {..} = do
