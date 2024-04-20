@@ -275,7 +275,7 @@ runDaemon tcal = Network.withSocketsDo do
                 lastSkip <- Ref.readIORef lastSkipRef
                 STM.atomically do
                     when (lastSkip == skip) $ STM.writeTVar tskip (max 0 (skip - 1))
-                    STM.writeTChan broadcast C.emptyEntry
+                    STM.writeTChan broadcast $ fromMaybe C.emptyEntry result
                 Ref.writeIORef lastSkipRef skip
 
 safeLast :: [C.Entry] -> Maybe C.Entry
