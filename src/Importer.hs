@@ -8,22 +8,27 @@ module Importer
     ( importFiles
     ) where
 
+import Calendar qualified
 import Config qualified
 
 import Data.Default (def)
 import Data.Fixed (Fixed (MkFixed))
 import Data.Foldable (fold, traverse_)
 import Data.Foldable qualified as Foldable
+import Data.Functor ((<&>))
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Set qualified as Set
 import Data.Text qualified as Strict
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy qualified as Text
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Lazy.Builder qualified as Builder
 import Data.Text.Lazy.IO qualified as T
+import Data.Time qualified as Time
+import Data.Time.Calendar.Month qualified as Time
 import Data.Time.Clock qualified as Clock
-import Data.Time.Format qualified as Time
-import Data.Time.LocalTime qualified as Time
 
 import Network.Wreq qualified as Wreq
 
@@ -60,13 +65,97 @@ writeToOrgFile name outputPath cal = do
             pure $ Left "freeBusys > 0"
         | otherwise -> do
             putStrLn $ "running for " <> Strict.unpack name
+            now <- Calendar.now
             let
-                text = foldMap (eventToOrgText name) (Map.elems $ C.vcEvents cal)
+                timezoneInfo = parseTimezones now <$> C.vcTimeZones cal
+                text = foldMap (eventToOrgText name timezoneInfo) (Map.elems $ C.vcEvents cal)
+
             T.writeFile (Strict.unpack outputPath) $ Builder.toLazyText text
             pure $ Right ()
 
-eventToOrgText :: Strict.Text -> C.VEvent -> Builder
-eventToOrgText name C.VEvent {..} =
+parseTimezones :: Time.LocalTime -> C.VTimeZone -> Time.TimeZone
+parseTimezones now tz = Time.minutesToTimeZone offset
+  where
+    offset :: Int
+    offset = maybe 0 (C.utcOffsetValue . C.tzpTZOffsetTo) current `div` 60
+
+    standard :: [C.TZProp]
+    standard = Set.toList . C.vtzStandardC $ tz
+
+    daylight :: [C.TZProp]
+    daylight = Set.toList . C.vtzDaylightC $ tz
+
+    current :: Maybe C.TZProp
+    current =
+        case (standard, daylight) of
+            ([std], []) -> Just std
+            ([std], [dls]) -> match std dls
+            _o -> Nothing
+
+    getRecur :: C.TZProp -> Maybe C.Recur
+    getRecur = fmap C.rRuleValue . listToMaybe . Set.toList . C.tzpRRule
+
+    year :: Integer
+    year = case Time.toGregorian (Time.localDay now) of (y, _, _) -> y
+
+    byWeekDay :: Int -> Time.DayOfWeek -> [Time.Day]
+    byWeekDay m weekDay =
+        let
+            period :: Time.Month = Time.dayPeriod (Time.fromGregorian year m 1)
+        in
+            [day | day <- Time.periodAllDays period, Time.dayOfWeek day == weekDay]
+
+    mkLocalTime :: C.Recur -> Time.LocalTime
+    mkLocalTime C.Recur {..} = Time.LocalTime day' Time.midnight
+      where
+        recurMonth =
+            case recurByMonth of
+                [m] -> m
+                _o -> 1
+        (recurWeekDay, recurCount) =
+            case recurByDay of
+                [Left (n, weekDay)] -> (toDayOfWeek weekDay, n)
+                _o -> (Time.Sunday, 1)
+
+        day' =
+            if recurCount < 0
+                then head . drop (abs recurCount - 1) . reverse . byWeekDay recurMonth $ recurWeekDay
+                else head . drop (abs recurCount - 1) . byWeekDay recurMonth $ recurWeekDay
+
+    toDayOfWeek :: C.Weekday -> Time.DayOfWeek
+    toDayOfWeek =
+        \case
+            C.Monday -> Time.Monday
+            C.Tuesday -> Time.Tuesday
+            C.Wednesday -> Time.Wednesday
+            C.Thursday -> Time.Thursday
+            C.Friday -> Time.Friday
+            C.Saturday -> Time.Saturday
+            C.Sunday -> Time.Sunday
+
+    match :: C.TZProp -> C.TZProp -> Maybe C.TZProp
+    match std dl =
+        case (getRecur std, getRecur dl) of
+            (Nothing, Nothing) -> Nothing
+            (Just stdRecur, Just dlRecur) ->
+                let
+                    standardDay = mkLocalTime stdRecur
+                    daylightDay = mkLocalTime dlRecur
+                in
+                    if standardDay > daylightDay
+                        then
+                            if now > standardDay && now < daylightDay
+                                then Just std
+                                else Just dl
+                        else
+                            if now > daylightDay && now < standardDay
+                                then Just dl
+                                else Just std
+            (Just _, _) -> Just std
+            (_, Just _) -> Just dl
+
+eventToOrgText :: Strict.Text -> Map Text Time.TimeZone -> C.VEvent -> Builder
+eventToOrgText name timezones C.VEvent {..} =
     fold
         [ title
         , tag
@@ -147,10 +236,10 @@ eventToOrgText name C.VEvent {..} =
     class_ = mkStringProperty "Class" (show . C.classValue) veClass
 
     created :: Builder
-    created = maybe mempty (mkProperty "Created" (fromDate . C.createdValue)) veCreated
+    created = maybe mempty (mkProperty "Created" (formatDate . C.createdValue)) veCreated
 
     lastMod :: Builder
-    lastMod = maybe mempty (mkProperty "LastModified" (fromDate . C.lastModifiedValue)) veLastMod
+    lastMod = maybe mempty (mkProperty "LastModified" (formatDate . C.lastModifiedValue)) veLastMod
 
     location :: Builder
     location = maybe mempty (mkTextProperty "Location" C.locationValue) veLocation
@@ -167,19 +256,17 @@ eventToOrgText name C.VEvent {..} =
     transparency :: Builder
     transparency = mkProperty "Transparency" transparencyToBuilder veTransp
 
+    localTimeZone :: Time.TimeZone
+    localTimeZone = fromMaybe Time.utc . Map.lookup "Europe/Bucharest" $ timezones
+
     startLocalTime :: Maybe Time.LocalTime
     startLocalTime =
-        veDTStart >>= \case
-            C.DTStartDateTime {..} ->
-                case dtStartDateTimeValue of
-                    C.FloatingDateTime {..} -> Just dateTimeFloating
-                    C.UTCDateTime {..} -> Just $ Time.utcToLocalTime Time.utc dateTimeUTC
-                    C.ZonedDateTime {..} -> Just dateTimeFloating
-            C.DTStartDate {..} ->
-                Just $ Time.LocalTime (C.dateValue dtStartDateValue) Time.midnight
+        veDTStart <&> \case
+            C.DTStartDateTime {..} -> fromDateTime timezones localTimeZone dtStartDateTimeValue
+            C.DTStartDate {..} -> Time.LocalTime (C.dateValue dtStartDateValue) Time.midnight
 
     startDate :: Builder
-    startDate = maybe mempty (mappend "  " . fromDate) startLocalTime
+    startDate = maybe mempty (mappend "  " . formatDate) startLocalTime
 
     endDate :: Builder
     endDate =
@@ -189,11 +276,11 @@ eventToOrgText name C.VEvent {..} =
                 case veDTEndDuration of
                     Nothing -> mempty
                     Just (Left C.DTEndDateTime {..}) ->
-                        "--" <> fromDateTime dtEndDateTimeValue
+                        "--" <> formatDate (fromDateTime timezones localTimeZone dtEndDateTimeValue)
                     Just (Left C.DTEndDate {..}) ->
-                        "--" <> fromDate (C.dateValue dtEndDateValue)
+                        "--" <> formatDate (C.dateValue dtEndDateValue)
                     Just (Right C.DurationProp {..}) ->
-                        "--" <> fromDate (Time.addLocalTime (diffTime durationValue) startTime)
+                        "--" <> formatDate (Time.addLocalTime (diffTime durationValue) startTime)
 
     diffTime :: C.Duration -> Clock.NominalDiffTime
     diffTime d =
@@ -226,12 +313,16 @@ eventToOrgText name C.VEvent {..} =
                 C.Positive -> 1
                 C.Negative -> (-1)
 
-fromDateTime :: C.DateTime -> Builder
-fromDateTime =
+fromDateTime :: Map Text Time.TimeZone -> Time.TimeZone -> C.DateTime -> Time.LocalTime
+fromDateTime timezones local =
     \case
-        C.FloatingDateTime d -> fromDate d
-        C.UTCDateTime d -> fromDate d
-        C.ZonedDateTime d _ -> fromDate d
+        C.FloatingDateTime {..} -> dateTimeFloating
+        C.UTCDateTime {..} -> Time.utcToLocalTime local dateTimeUTC
+        C.ZonedDateTime {..} ->
+            let
+                tz = fromMaybe local $ Map.lookup dateTimeZone timezones
+            in
+                Time.utcToLocalTime local $ Time.localTimeToUTC tz dateTimeFloating
 
 transparencyToBuilder :: C.TimeTransparency -> Builder
 transparencyToBuilder =
@@ -246,8 +337,8 @@ statusToBuilder =
         C.ConfirmedEvent _ -> "Confirmed"
         C.CancelledEvent _ -> "Cancelled"
 
-fromDate :: forall t. (Time.FormatTime t) => t -> Builder
-fromDate time =
+formatDate :: forall t. (Time.FormatTime t) => t -> Builder
+formatDate time =
     "<"
         <> Builder.fromString
             (Time.formatTime Time.defaultTimeLocale "%Y-%m-%d %a %H:%M" time)

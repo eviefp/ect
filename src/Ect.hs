@@ -96,11 +96,7 @@ textToRunMode input =
 eval :: RunMode -> IO ()
 eval runMode = do
     config <- Config.getConfig
-    let
-        importedCalendars = T.unpack . Config.outputPath <$> config.calendars
-        localCalendars = T.unpack <$> config.export.extraCalendars
-    cal <-
-        C.mkCalendar $ importedCalendars <> localCalendars
+    cal <- readCalendar config
     case runMode of
         Server -> do
             calTvar <- STM.newTVarIO cal
@@ -109,7 +105,6 @@ eval runMode = do
                 [ updateCalendar config calTvar
                 , runDaemon calTvar
                 , runNotifications config calTvar
-                , exporterLoop config
                 ]
         Upcoming k -> processUpcoming cal k
         Export -> runExport config
@@ -133,15 +128,26 @@ processUpcoming cal n = do
         result = fmap C.UpcomingEntry . C.entriesAfter n now $ cal
     T.putStrLn . T.decodeUtf8 . BS.toStrict . Aeson.encode $ result
 
-updateCalendar :: Config.EctConfig -> TVar C.Calendar -> IO ()
-updateCalendar config tcal = forever do
+readCalendar :: Config.EctConfig -> IO C.Calendar
+readCalendar config =
     let
         importedCalendars = T.unpack . Config.outputPath <$> config.calendars
         localCalendars = T.unpack <$> config.export.extraCalendars
-    cal <-
+    in
         C.mkCalendar $ importedCalendars <> localCalendars
-    STM.atomically . STM.writeTVar tcal $ cal
-    Conc.threadDelay 60_000_000 -- one minute
+
+updateCalendar :: Config.EctConfig -> TVar C.Calendar -> IO ()
+updateCalendar config tcal = forever do
+    -- import and export calendars first
+    when config.export.enable do
+        Importer.importFiles config.calendars
+        runExport config
+
+    -- update in-memory cache
+    readCalendar config >>= STM.atomically . STM.writeTVar tcal
+
+    -- pause for 1 minute
+    Conc.threadDelay 60_000_000
 
 runNotifications :: Config.EctConfig -> TVar C.Calendar -> IO ()
 runNotifications config tcal = do
@@ -228,7 +234,6 @@ runDaemon tcal = Network.withSocketsDo do
             Inc -> STM.atomically $ STM.modifyTVar tskip (+ 1)
             Dec -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
             Server -> pure ()
-        Conc.threadDelay 5_000_000
 
     sendEntry :: Network.Socket -> C.Entry -> IO ()
     sendEntry conn entry = do
@@ -279,12 +284,6 @@ safeLast =
         [] -> Nothing
         [x] -> Just x
         (_ : xs) -> safeLast xs
-
-exporterLoop :: Config.EctConfig -> IO ()
-exporterLoop config =
-    when config.export.enable $ forever do
-        runExport config
-        Conc.threadDelay $ 1_000_000 * 60 * 10 -- 10 minutes
 
 runExport :: Config.EctConfig -> IO ()
 runExport Config.EctConfig {..} =
