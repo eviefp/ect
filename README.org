@@ -1,24 +1,16 @@
 * TODO
-
-- [X] parse ics to org here
-  - [X] parse ics
-  - [X] check out org agenda syntax
-    - [X] groups?
-    - [X] drawers?
-    - [X] config?
-    - [X] sections?
-  - [X] output as org
-    - [X] output to temp files
-    - [X] parsing
-    - [X] replace old config to new config in code
-    - [X] nix config changes
-
-- [ ] remaining fields
-
-- [ ] exporter update with new fields!
-
-- [ ] template for new agenda item
-
-- [ ] duration export in a reasonable format
-
-- [ ] ect new, writes to local?
+- [ ] Config
+  - [ ] Local calendars lack name, and are assumed to be exported
+- [ ] Exporter
+  - [ ] remaining fields
+  - [ ] exporter update with new fields!
+  - [ ] duration export in a reasonable format
+  - [ ] how can I permanently remove events from non-local calendars?
+- [ ] TUI
+  - [ ] location info for `mkCalendar` / reading calendar from a file
+    and store it in each Entry
+  - [ ] ect new/edit -- emacsclient using location info?
+  - [ ] template for new agenda item
+- [ ] Recurrence
+  - [ ] not handing it properly, should figure it out for both
+    imported and local calendars

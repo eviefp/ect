@@ -64,18 +64,32 @@ library
                    , Exporter
                    , Importer
                    , Config
+                   , TUI
+                   , TUI.Events
+                   , TUI.State
+                   , TUI.Component.List
+                   , TUI.Component.Week
 
     -- Modules included in this library but not exported.
     -- other-modules:
 
     -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
+    default-extensions: BlockArguments
+                      , DerivingStrategies
+                      , DerivingVia
+                      , DuplicateRecordFields
+                      , LambdaCase
+                      , MultiWayIf
+                      , OverloadedRecordDot
+                      , OverloadedStrings
+                      , RecordWildCards
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.18.1.0
                     , aeson
                     , async
                     , async-timer
+                    , brick >= 2.3.1
                     , bytestring
                     , containers
                     , data-default
@@ -83,7 +97,9 @@ library
                     , hashable
                     , iCalendar
                     , iso8601-time
+                    , lens
                     , modern-uri
+                    , mtl
                     , network
                     , org-parser
                     , process
@@ -91,6 +107,7 @@ library
                     , text
                     , time
                     , unbounded-delays
+                    , vty
                     , wreq
                     , yaml
 
@@ -106,6 +123,8 @@ executable ect
 
     -- .hs or .lhs file containing the Main module.
     main-is:          Main.hs
+
+    ghc-options: -threaded -rtsopts
 
     -- Modules included in this executable, other than Main.
     -- other-modules:

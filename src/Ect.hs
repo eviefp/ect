@@ -1,12 +1,3 @@
-{-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-
 module Ect (main) where
 
 import Calendar qualified as C
@@ -14,6 +5,7 @@ import Config qualified
 import Exporter qualified
 import Foreign qualified
 import Importer qualified
+import TUI qualified
 
 import Control.Concurrent qualified as Conc
 import Control.Concurrent.Async (Async)
@@ -56,6 +48,7 @@ data RunMode
     | Upcoming !Int
     | Export
     | Import
+    | Tui
 
 parseArgs :: [String] -> Maybe RunMode
 parseArgs = \case
@@ -68,7 +61,8 @@ parseArgs = \case
     ["--upcoming", k] -> Just $ Upcoming (fromMaybe 10 $ R.readMaybe k)
     ["--export"] -> Just Export
     ["--import"] -> Just Import
-    _k -> Nothing
+    ["tui"] -> Just Tui
+    _k -> Just Tui
 
 runModeToText :: RunMode -> Maybe Text
 runModeToText = \case
@@ -79,6 +73,7 @@ runModeToText = \case
     Upcoming _ -> Nothing
     Export -> Nothing
     Import -> Nothing
+    Tui -> Nothing
 
 textToRunMode :: Text -> RunMode
 textToRunMode input =
@@ -96,7 +91,7 @@ textToRunMode input =
 eval :: RunMode -> IO ()
 eval runMode = do
     config <- Config.getConfig
-    cal <- readCalendar config
+    cal <- C.fromConfig config
     case runMode of
         Server -> do
             calTvar <- STM.newTVarIO cal
@@ -111,6 +106,7 @@ eval runMode = do
         Import -> do
             _ <- Importer.importFiles config.calendars
             pure ()
+        Tui -> TUI.run config
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
             Network.connect socket $ Network.SockAddrUnix socketAddress
@@ -128,14 +124,6 @@ processUpcoming cal n = do
         result = fmap C.UpcomingEntry . C.entriesAfter n now $ cal
     T.putStrLn . T.decodeUtf8 . BS.toStrict . Aeson.encode $ result
 
-readCalendar :: Config.EctConfig -> IO C.Calendar
-readCalendar config =
-    let
-        importedCalendars = T.unpack . Config.outputPath <$> config.calendars
-        localCalendars = T.unpack <$> config.export.extraCalendars
-    in
-        C.mkCalendar $ importedCalendars <> localCalendars
-
 updateCalendar :: Config.EctConfig -> TVar C.Calendar -> IO ()
 updateCalendar config tcal = forever do
     -- import and export calendars first
@@ -144,7 +132,7 @@ updateCalendar config tcal = forever do
         runExport config
 
     -- update in-memory cache
-    readCalendar config >>= STM.atomically . STM.writeTVar tcal
+    C.fromConfig config >>= STM.atomically . STM.writeTVar tcal
 
     -- pause for 1 minute
     Conc.threadDelay 60_000_000
@@ -177,7 +165,7 @@ runNotifications config tcal = do
     mkNewThreadsMap now threads (x : xs) = do
         t <- case Map.lookup x threads of
             Just t -> pure t
-            Nothing -> mkThread (toMicroseconds now $ C.entryStartTime x) x
+            Nothing -> mkThread (toMicroseconds now $ C._entryStartTime x) x
         Map.insert x t <$> mkNewThreadsMap now threads xs
 
     toMicroseconds :: Time.LocalTime -> Time.LocalTime -> Integer
@@ -193,7 +181,7 @@ runNotifications config tcal = do
     mkThread delay C.Entry {..} =
         Async.async do
             Delays.delay delay
-            run entryTitle
+            run _entryTitle
 
     run :: Text -> IO ()
     run title =
@@ -234,6 +222,7 @@ runDaemon tcal = Network.withSocketsDo do
             Inc -> STM.atomically $ STM.modifyTVar tskip (+ 1)
             Dec -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
             Server -> pure ()
+            _otherwise -> pure ()
 
     sendEntry :: Network.Socket -> C.Entry -> IO ()
     sendEntry conn entry = do

@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-
 module Exporter
     ( exportFiles
     ) where
@@ -260,7 +257,7 @@ entryToEvent now Entry {..} =
                 C.DTStartDateTime
                     { C.dtStartDateTimeValue =
                         C.ZonedDateTime
-                            { C.dateTimeFloating = entryStartTime
+                            { C.dateTimeFloating = _entryStartTime
                             , C.dateTimeZone = "Europe/Bucharest"
                             }
                     , C.dtStartOther = def
@@ -299,7 +296,7 @@ entryToEvent now Entry {..} =
         , C.veSummary =
             Just
                 C.Summary
-                    { C.summaryValue = T.fromStrict entryTitle
+                    { C.summaryValue = T.fromStrict _entryTitle
                     , C.summaryAltRep = Nothing
                     , C.summaryLanguage = Nothing
                     , C.summaryOther = def
@@ -321,9 +318,9 @@ entryToEvent now Entry {..} =
                                     fromMaybe
                                         ( T.addLocalTime
                                             (T.secondsToNominalDiffTime 3600)
-                                            entryStartTime
+                                            _entryStartTime
                                         )
-                                        entryEndTime
+                                        _entryEndTime
                                 , C.dateTimeZone = "Europe/Bucharest"
                                 }
                         , C.dtEndOther = def
@@ -343,6 +340,6 @@ entryToEvent now Entry {..} =
         }
     )
   where
-    startTimeText = T.pack $ show entryStartTime
-    hash = abs $ H.hash $ startTimeText <> T.fromStrict entryTitle
+    startTimeText = T.pack $ show _entryStartTime
+    hash = abs $ H.hash $ startTimeText <> T.fromStrict _entryTitle
     uid = T.pack (show hash) <> "@calendar.eevie.ro"

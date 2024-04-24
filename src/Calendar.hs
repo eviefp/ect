@@ -1,18 +1,35 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Calendar
     ( Entry (..)
+    , entryTitle
+    , entryTags
+    , entryStartTime
+    , entryEndTime
+    , entryDescription
+    , entryProperties
+    , entrySection
     , emptyEntry
+    , Properties (..)
+    , propertyUid
+    , propertyClass
+    , propertyCreated
+    , propertyLastModified
+    , propertyLocation
+    , propertyOrganizer
+    , propertySequence
+    , propertyStatus
+    , propertyTransparency
     , UpcomingEntry (..)
     , Calendar (calendarEntries)
     , mkCalendar
+    , fromConfig
     , now
     , entriesAfter
+    , entriesFor
     ) where
 
+import Control.Lens (makeLenses)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.IO.Class qualified as IO
 
@@ -33,9 +50,55 @@ import Data.Time.Calendar.OrdinalDate qualified as Time
 
 import GHC.Generics (Generic)
 
+import Config qualified
 import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
 import Org.Walk qualified as Org
+
+data Properties = Properties
+    { _propertyUid :: !Text
+    , _propertyClass :: !Text
+    , _propertyCreated :: !(Maybe Text) -- TODO: parse
+    , _propertyLastModified :: !(Maybe Text)
+    , _propertyLocation :: !(Maybe Text)
+    , _propertyOrganizer :: !(Maybe Text)
+    , _propertySequence :: !Int
+    , _propertyStatus :: !(Maybe Text)
+    , _propertyTransparency :: !Text
+    }
+    deriving stock (Eq, Generic)
+
+makeLenses ''Properties
+
+data Entry = Entry
+    { _entryTitle :: !Text
+    , _entryTags :: ![Text]
+    , _entryStartTime :: !Time.LocalTime
+    , _entryEndTime :: !(Maybe Time.LocalTime)
+    , _entryDescription :: !Text
+    , _entryProperties :: !Properties
+    , _entrySection :: !(Maybe Org.OrgSection)
+    }
+    deriving stock (Eq, Generic)
+
+makeLenses ''Entry
+
+newtype Calendar = Calendar {calendarEntries :: [Entry]}
+
+mkCalendar :: (MonadIO m) => [FilePath] -> m Calendar
+mkCalendar files =
+    Calendar
+        . List.sortOn _entryStartTime
+        . concatMap walkEntries
+        <$> traverse (OrgParser.parseOrgDocIO OrgParser.defaultOrgOptions) files
+
+fromConfig :: (MonadIO m) => Config.EctConfig -> m Calendar
+fromConfig config =
+    let
+        importedCalendars = T.unpack . Config.outputPath <$> config.calendars
+        localCalendars = T.unpack <$> config.export.extraCalendars
+    in
+        mkCalendar (importedCalendars <> localCalendars)
 
 now :: (MonadIO m) => m Time.LocalTime
 now = Time.zonedTimeToLocalTime <$> IO.liftIO Time.getZonedTime
@@ -48,84 +111,73 @@ entriesAfter k localTime = take k . go . calendarEntries
         \case
             [] -> []
             (x : xs)
-                | entryStartTime x > localTime -> x : xs
+                | _entryStartTime x > localTime -> x : xs
                 | otherwise -> go xs
 
-data Properties = Properties
-    { propertyUid :: !Text
-    , propertyClass :: !Text
-    , propertyCreated :: !(Maybe Text) -- TODO: parse
-    , propertyLastModified :: !(Maybe Text)
-    , propertyLocation :: !(Maybe Text)
-    , propertyOrganizer :: !(Maybe Text)
-    , propertySequence :: !Int
-    , propertyStatus :: !(Maybe Text)
-    , propertyTransparency :: !Text
-    }
-    deriving stock (Eq, Generic)
-
-data Entry = Entry
-    { entryTitle :: !Text
-    , entryTags :: ![Text]
-    , entryStartTime :: !Time.LocalTime
-    , entryEndTime :: !(Maybe Time.LocalTime)
-    , entryDescription :: !Text
-    , entryProperties :: !Properties
-    , entrySection :: !(Maybe Org.OrgSection)
-    }
-    deriving stock (Eq, Generic)
+entriesFor :: Calendar -> Time.Day -> [Entry]
+entriesFor cal day = go $ calendarEntries cal
+  where
+    go :: [Entry] -> [Entry]
+    go =
+        \case
+            [] -> []
+            (x : xs)
+                | (Time.localDay . _entryStartTime $ x) == day -> x : go xs
+                | otherwise -> go xs
 
 emptyEntry :: Entry
 emptyEntry =
     let
-        entryTitle = "Calendar is empty."
-        entryTags = []
-        entryStartTime = Time.LocalTime (toEnum 0) Time.midnight
-        entryEndTime = Nothing
-        entryDescription = ""
-        entryProperties = emptyProperties
-        entrySection = Nothing
+        _entryTitle = "Calendar is empty."
+        _entryTags = []
+        _entryStartTime = Time.LocalTime (toEnum 0) Time.midnight
+        _entryEndTime = Nothing
+        _entryDescription = ""
+        _entryProperties = emptyProperties
+        _entrySection = Nothing
     in
         Entry {..}
 
 emptyProperties :: Properties
 emptyProperties =
     let
-        propertyUid = ""
-        propertyClass = ""
-        propertyCreated = Nothing
-        propertyLastModified = Nothing
-        propertyLocation = Nothing
-        propertyOrganizer = Nothing
-        propertySequence = 0
-        propertyStatus = Nothing
-        propertyTransparency = ""
+        _propertyUid = ""
+        _propertyClass = ""
+        _propertyCreated = Nothing
+        _propertyLastModified = Nothing
+        _propertyLocation = Nothing
+        _propertyOrganizer = Nothing
+        _propertySequence = 0
+        _propertyStatus = Nothing
+        _propertyTransparency = ""
     in
         Properties {..}
 
 instance Ord Entry where
     compare :: Entry -> Entry -> Ordering
-    compare = compare `on` entryStartTime
+    compare = compare `on` _entryStartTime
 
 instance Aeson.ToJSON Entry where
     toJSON :: Entry -> Aeson.Value
     toJSON Entry {..} =
         Aeson.object
-            [ "title" .= entryTitle
-            , "time" .= printTime entryStartTime
-            , "date" .= printDate entryStartTime
+            [ "title" .= _entryTitle
+            , "time" .= printTime _entryStartTime
+            , "date" .= printDate _entryStartTime
             , "duration"
-                .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
+                .= round @_ @Int
+                    ((/ 60) (Time.diffLocalTime (fromMaybe _entryStartTime _entryEndTime) _entryStartTime))
             ]
 
     toEncoding :: Entry -> Aeson.Encoding
     toEncoding Entry {..} =
         Aeson.pairs $
-            "title" .= entryTitle
-                <> "time" .= printTime entryStartTime
-                <> "date" .= printDate entryStartTime
+            "title" .= _entryTitle
+                <> "time" .= printTime _entryStartTime
+                <> "date" .= printDate _entryStartTime
                 <> "duration"
-                    .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
+                    .= round @_ @Int
+                        ((/ 60) (Time.diffLocalTime (fromMaybe _entryStartTime _entryEndTime) _entryStartTime))
 
 printTime :: Time.LocalTime -> String
 printTime = Time.formatTime Time.defaultTimeLocale "%H:%M"
@@ -140,33 +192,26 @@ instance Aeson.ToJSON UpcomingEntry where
     toJSON :: UpcomingEntry -> Aeson.Value
     toJSON UpcomingEntry {getUpcomingEntry = Entry {..}} =
         Aeson.object
-            [ "title" .= entryTitle
-            , "time" .= printTime entryStartTime
-            , "date" .= printUpcomingDate entryStartTime
+            [ "title" .= _entryTitle
+            , "time" .= printTime _entryStartTime
+            , "date" .= printUpcomingDate _entryStartTime
             , "duration"
-                .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
+                .= round @_ @Int
+                    ((/ 60) (Time.diffLocalTime (fromMaybe _entryStartTime _entryEndTime) _entryStartTime))
             ]
 
     toEncoding :: UpcomingEntry -> Aeson.Encoding
     toEncoding UpcomingEntry {getUpcomingEntry = Entry {..}} =
         Aeson.pairs $
-            "title" .= entryTitle
-                <> "time" .= printTime entryStartTime
-                <> "date" .= printUpcomingDate entryStartTime
+            "title" .= _entryTitle
+                <> "time" .= printTime _entryStartTime
+                <> "date" .= printUpcomingDate _entryStartTime
                 <> "duration"
-                    .= round @_ @Int ((/ 60) (Time.diffLocalTime (fromMaybe entryStartTime entryEndTime) entryStartTime))
+                    .= round @_ @Int
+                        ((/ 60) (Time.diffLocalTime (fromMaybe _entryStartTime _entryEndTime) _entryStartTime))
 
 printUpcomingDate :: Time.LocalTime -> String
 printUpcomingDate = Time.formatTime Time.defaultTimeLocale "%A, %d %b"
-
-newtype Calendar = Calendar {calendarEntries :: [Entry]}
-
-mkCalendar :: (MonadIO m) => [FilePath] -> m Calendar
-mkCalendar files =
-    Calendar
-        . List.sortOn entryStartTime
-        . concatMap walkEntries
-        <$> traverse (OrgParser.parseOrgDocIO OrgParser.defaultOrgOptions) files
 
 walkEntries :: Org.OrgDocument -> [Entry]
 walkEntries = Org.query go -- TODO: does this go deep?
@@ -177,16 +222,16 @@ walkEntries = Org.query go -- TODO: does this go deep?
             Nothing -> []
             Just (startDate, mEndDate) ->
                 let
-                    entryTitle = Org.sectionRawTitle section
-                    entryTags = Org.sectionTags section
-                    entryStartTime = startDate
-                    entryEndTime = mEndDate
-                    entryProperties = mkProperties $ Org.sectionProperties section
-                    entryDescription =
+                    _entryTitle = Org.sectionRawTitle section
+                    _entryTags = Org.sectionTags section
+                    _entryStartTime = startDate
+                    _entryEndTime = mEndDate
+                    _entryProperties = mkProperties $ Org.sectionProperties section
+                    _entryDescription =
                         LazyText.toStrict $
                             Builder.toLazyText $
                                 foldMap (Org.query mkDescription) (Org.sectionChildren section)
-                    entrySection = Just section
+                    _entrySection = Just section
                 in
                     [Entry {..}]
 
@@ -243,15 +288,15 @@ mkProperties props =
         get key = Map.lookup key props
         getDef key def = fromMaybe def $ get key
 
-        propertyUid = getDef "UID" ""
-        propertyClass = getDef "Class" ""
-        propertyCreated = get "Created"
-        propertyLastModified = get "LastModified"
-        propertyLocation = get "Location"
-        propertyOrganizer = get "Organizer"
-        propertySequence = read . T.unpack $ getDef "Sequence" "0"
-        propertyStatus = get "Status"
-        propertyTransparency = getDef "Transparency" ""
+        _propertyUid = getDef "UID" ""
+        _propertyClass = getDef "Class" ""
+        _propertyCreated = get "Created"
+        _propertyLastModified = get "LastModified"
+        _propertyLocation = get "Location"
+        _propertyOrganizer = get "Organizer"
+        _propertySequence = read . T.unpack $ getDef "Sequence" "0"
+        _propertyStatus = get "Status"
+        _propertyTransparency = getDef "Transparency" ""
     in
         Properties {..}
 
