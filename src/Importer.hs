@@ -33,20 +33,23 @@ importFiles :: [Config.EctCalendarConfig] -> IO ()
 importFiles = traverse_ importFile
 
 importFile :: Config.EctCalendarConfig -> IO (Either String ())
-importFile Config.EctCalendarConfig {..} = do
-    input <- fold <$> Wreq.get (Strict.unpack inputUrl)
-    let
-        result = CalParser.parseICalendar def (Strict.unpack name) input
-    case result of
-        Left err -> do
-            putStrLn "error"
-            putStrLn err
-            pure $ Left err
-        Right ([vc], []) -> do
-            writeToOrgFile name outputPath vc
-        Right (vc, str) -> do
-            putStrLn $ "vc: " <> show (length vc) <> ", errors: " <> show (length str)
-            pure $ Left $ "vc: " <> show (length vc) <> ", errors: " <> show (length str)
+importFile Config.EctCalendarConfig {..} =
+    case importFrom of
+        Nothing -> pure $ Right ()
+        Just url -> do
+            input <- fold <$> Wreq.get (Strict.unpack url)
+            let
+                result = CalParser.parseICalendar def (Strict.unpack name) input
+            case result of
+                Left err -> do
+                    putStrLn "error"
+                    putStrLn err
+                    pure $ Left err
+                Right ([vc], []) -> do
+                    writeToOrgFile name path vc
+                Right (vc, str) -> do
+                    putStrLn $ "vc: " <> show (length vc) <> ", errors: " <> show (length str)
+                    pure $ Left $ "vc: " <> show (length vc) <> ", errors: " <> show (length str)
 
 writeToOrgFile :: Strict.Text -> Strict.Text -> C.VCalendar -> IO (Either String ())
 writeToOrgFile name outputPath cal = do

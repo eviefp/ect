@@ -15,7 +15,7 @@ testConfigPath = "./ect.yaml"
 getConfig :: IO EctConfig
 getConfig = Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath >>= Yaml.decodeFileThrow
 
--- getConfig = Yaml.decodeFileThrow defaultConfigPath
+-- getConfig = Yaml.decodeFileThrow testConfigPath
 
 data EctConfig = EctConfig
     { calendars :: ![EctCalendarConfig]
@@ -27,8 +27,8 @@ instance Aeson.FromJSON EctConfig
 
 data EctCalendarConfig = EctCalendarConfig
     { name :: !Text
-    , inputUrl :: !Text
-    , outputPath :: !Text
+    , importFrom :: !(Maybe Text)
+    , path :: !Text
     , shouldExport :: !Bool
     }
     deriving stock (Generic)
@@ -43,7 +43,6 @@ instance Aeson.FromJSON EctNotificationConfig
 
 data EctExportConfig = EctExportConfig
     { enable :: !Bool
-    , extraCalendars :: ![Text]
     , output :: !Text
     }
     deriving stock (Generic)

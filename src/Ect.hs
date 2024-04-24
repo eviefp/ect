@@ -277,11 +277,9 @@ safeLast =
 runExport :: Config.EctConfig -> IO ()
 runExport Config.EctConfig {..} =
     let
-        shouldExportCalendars = (T.unpack . Config.outputPath <$> filter Config.shouldExport calendars)
+        shouldExportCalendars = (T.unpack . Config.path <$> filter Config.shouldExport calendars)
     in
-        Exporter.exportFiles
-            (shouldExportCalendars <> fmap T.unpack export.extraCalendars)
-            (T.unpack $ Config.output export)
+        Exporter.exportFiles shouldExportCalendars (T.unpack $ Config.output export)
 
 main :: IO ()
 main = do

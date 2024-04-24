@@ -95,10 +95,9 @@ mkCalendar files =
 fromConfig :: (MonadIO m) => Config.EctConfig -> m Calendar
 fromConfig config =
     let
-        importedCalendars = T.unpack . Config.outputPath <$> config.calendars
-        localCalendars = T.unpack <$> config.export.extraCalendars
+        calendars = T.unpack . Config.path <$> config.calendars
     in
-        mkCalendar (importedCalendars <> localCalendars)
+        mkCalendar calendars
 
 now :: (MonadIO m) => m Time.LocalTime
 now = Time.zonedTimeToLocalTime <$> IO.liftIO Time.getZonedTime

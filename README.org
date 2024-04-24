@@ -1,6 +1,6 @@
 * TODO
-- [ ] Config
-  - [ ] Local calendars lack name, and are assumed to be exported
+- [X] Config
+  - [X] Local calendars lack name, and are assumed to be exported
 - [ ] Exporter
   - [ ] remaining fields
   - [ ] exporter update with new fields!
@@ -11,6 +11,7 @@
     and store it in each Entry
   - [ ] ect new/edit -- emacsclient using location info?
   - [ ] template for new agenda item
+  - [ ] new mode like Week but with hours like gcal
 - [ ] Recurrence
   - [ ] not handing it properly, should figure it out for both
     imported and local calendars
