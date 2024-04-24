@@ -28,6 +28,18 @@
                   ref = "master";
                   rev = "0858aa2ed64bc5357e943ab1e1327721e24b566d";
                 }) {};
+
+              vty = hself.callCabal2nix "vty" (
+                builtins.fetchGit {
+                  url = "https://github.com/jtdaugherty/vty.git";
+                  rev = "2f9eb83654f9942a4ec54d9d2335a941fa66e272";
+                }) {};
+              vty-unix = hlib.doJailbreak (hlib.markUnbroken hsuper.vty-unix);
+              brick = hself.callCabal2nix "brick" (
+                builtins.fetchGit {
+                  url = "https://github.com/jtdaugherty/brick.git";
+                  rev = "fc6f5eed07829d3e3be6717097c0249b1f2a0c04";
+                }) {};
             };
           };
         in
