@@ -43,7 +43,8 @@ instance Aeson.FromJSON EctNotificationConfig
 
 data EctExportConfig = EctExportConfig
     { enable :: !Bool
-    , output :: !Text
+    , outputPath :: !Text
+    , httpPort :: !Int
     }
     deriving stock (Generic)
 instance Aeson.FromJSON EctExportConfig

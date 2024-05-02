@@ -1,14 +1,16 @@
 * TODO
-- [X] Config
-  - [X] Local calendars lack name, and are assumed to be exported
 - [ ] Exporter
   - [ ] remaining fields
   - [ ] exporter update with new fields!
   - [ ] duration export in a reasonable format
   - [ ] how can I permanently remove events from non-local calendars?
-- [ ] TUI
+
+- [ ] Parser
   - [ ] location info for `mkCalendar` / reading calendar from a file
     and store it in each Entry
+  - [ ] inherit tags
+
+- [ ] TUI
   - [ ] ect new/edit -- emacsclient using location info?
   - [ ] template for new agenda item
   - [ ] new mode like Week but with hours like gcal

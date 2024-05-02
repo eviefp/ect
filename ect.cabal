@@ -69,6 +69,8 @@ library
                    , TUI.State
                    , TUI.Component.List
                    , TUI.Component.Week
+                   , Org
+                   , HttpServer
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -95,9 +97,11 @@ library
                     , data-default
                     , directory
                     , hashable
+                    , http-types
                     , iCalendar
                     , iso8601-time
                     , lens
+                    , megaparsec
                     , modern-uri
                     , mtl
                     , network
@@ -106,8 +110,10 @@ library
                     , stm
                     , text
                     , time
+                    , twain
                     , unbounded-delays
                     , vty
+                    , warp
                     , wreq
                     , yaml
 
@@ -167,5 +173,21 @@ test-suite ect-test
 
     -- Test dependencies.
     build-depends:
-        base ^>=4.18.1.0,
-        ect
+          base ^>=4.18.1.0
+        , ect
+        , HUnit
+        , megaparsec
+        , tasty
+        , tasty-hunit
+        , text
+        , transformers
+
+    default-extensions: BlockArguments
+                      , DerivingStrategies
+                      , DerivingVia
+                      , DuplicateRecordFields
+                      , LambdaCase
+                      , MultiWayIf
+                      , OverloadedRecordDot
+                      , OverloadedStrings
+                      , RecordWildCards

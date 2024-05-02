@@ -1,3 +1,5 @@
 /.direnv/
 /dist-newstyle/
 /ect.yaml
+*~undo-tree~
+/result

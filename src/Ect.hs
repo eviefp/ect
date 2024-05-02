@@ -4,6 +4,7 @@ import Calendar qualified as C
 import Config qualified
 import Exporter qualified
 import Foreign qualified
+import HttpServer qualified
 import Importer qualified
 import TUI qualified
 
@@ -100,6 +101,7 @@ eval runMode = do
                 [ updateCalendar config calTvar
                 , runDaemon calTvar
                 , runNotifications config calTvar
+                , HttpServer.run config.export
                 ]
         Upcoming k -> processUpcoming cal k
         Export -> runExport config
@@ -279,7 +281,7 @@ runExport Config.EctConfig {..} =
     let
         shouldExportCalendars = (T.unpack . Config.path <$> filter Config.shouldExport calendars)
     in
-        Exporter.exportFiles shouldExportCalendars (T.unpack $ Config.output export)
+        Exporter.exportFiles shouldExportCalendars (T.unpack $ Config.outputPath export)
 
 main :: IO ()
 main = do
