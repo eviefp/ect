@@ -97,7 +97,6 @@ library
                     , data-default
                     , directory
                     , hashable
-                    , http-types
                     , iCalendar
                     , iso8601-time
                     , lens
@@ -110,10 +109,9 @@ library
                     , stm
                     , text
                     , time
-                    , twain
+                    , scotty
                     , unbounded-delays
                     , vty
-                    , warp
                     , wreq
                     , yaml
 
