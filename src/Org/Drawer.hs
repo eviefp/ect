@@ -8,10 +8,9 @@ module Org.Drawer
     ) where
 
 import Control.Lens (makeLenses)
-import Data.Char qualified as Char
 import Data.Text (Text)
 import Org.Settings (Parser)
-import Text.Megaparsec qualified as M
+import Org.Settings qualified as Org
 import Text.Megaparsec.Char qualified as Char
 import Prelude hiding (repeat, words)
 
@@ -37,7 +36,7 @@ makeLenses ''Drawer
 parseDrawer :: Parser Drawer
 parseDrawer = do
     _ <- Char.string' ":"
-    _name <- M.takeWhile1P Nothing (\c -> Char.isAlphaNum c || c == '-' || c == '_')
+    _name <- Org.identifier
     _ <- Char.string' ":"
     _ <- Char.newline
     _content <- parseRest

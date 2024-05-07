@@ -192,8 +192,6 @@ eventToOrgText name timezones C.VEvent {..} =
             , newline
             , uid
             , class_
-            , created
-            , lastMod
             , location
             , organizer
             , sequence__
@@ -231,12 +229,6 @@ eventToOrgText name timezones C.VEvent {..} =
 
     class_ :: Builder
     class_ = mkStringProperty "Class" (show . C.classValue) veClass
-
-    created :: Builder
-    created = maybe mempty (mkProperty "Created" (formatDate . C.createdValue)) veCreated
-
-    lastMod :: Builder
-    lastMod = maybe mempty (mkProperty "LastModified" (formatDate . C.lastModifiedValue)) veLastMod
 
     location :: Builder
     location = maybe mempty (mkTextProperty "Location" C.locationValue) veLocation

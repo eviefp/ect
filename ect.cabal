@@ -74,6 +74,8 @@ library
                    , Org.Block
                    , Org.Drawer
                    , Org.Heading
+                   , Org.Footnote
+                   , Org.Item
                    , HttpServer
 
     -- Modules included in this library but not exported.
@@ -163,6 +165,8 @@ test-suite ect-test
         Block
       , Heading
       , Drawer
+      , Footnote
+      , Item
       , OrgTest
 
     -- LANGUAGE extensions used by modules in this package.

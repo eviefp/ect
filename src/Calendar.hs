@@ -13,8 +13,6 @@ module Calendar
     , Properties (..)
     , propertyUid
     , propertyClass
-    , propertyCreated
-    , propertyLastModified
     , propertyLocation
     , propertyOrganizer
     , propertySequence
@@ -58,8 +56,6 @@ import Org.Walk qualified as Org
 data Properties = Properties
     { _propertyUid :: !Text
     , _propertyClass :: !Text
-    , _propertyCreated :: !(Maybe Text) -- TODO: parse
-    , _propertyLastModified :: !(Maybe Text)
     , _propertyLocation :: !(Maybe Text)
     , _propertyOrganizer :: !(Maybe Text)
     , _propertySequence :: !Int
@@ -142,8 +138,6 @@ emptyProperties =
     let
         _propertyUid = ""
         _propertyClass = ""
-        _propertyCreated = Nothing
-        _propertyLastModified = Nothing
         _propertyLocation = Nothing
         _propertyOrganizer = Nothing
         _propertySequence = 0
@@ -289,8 +283,6 @@ mkProperties props =
 
         _propertyUid = getDef "UID" ""
         _propertyClass = getDef "Class" ""
-        _propertyCreated = get "Created"
-        _propertyLastModified = get "LastModified"
         _propertyLocation = get "Location"
         _propertyOrganizer = get "Organizer"
         _propertySequence = read . T.unpack $ getDef "Sequence" "0"
