@@ -1,4 +1,5 @@
 * TODO
+- [ ] fix notifications
 - [ ] Exporter
   - [ ] remaining fields
   - [ ] exporter update with new fields!

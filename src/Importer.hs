@@ -61,7 +61,6 @@ writeToOrgFile name outputPath cal = do
         | Map.size (C.vcFreeBusys cal) > 0 ->
             pure $ Left "freeBusys > 0"
         | otherwise -> do
-            putStrLn $ "running for " <> Strict.unpack name
             now <- Calendar.now
             let
                 timezoneInfo = parseTimezones now <$> C.vcTimeZones cal
