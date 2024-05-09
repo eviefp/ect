@@ -33,6 +33,7 @@ import Data.Text.IO qualified as T
 import Data.Text.Read qualified as TextRead
 import Data.Time qualified as Time
 
+import Data.Foldable (traverse_)
 import Network.Socket qualified as Network
 import System.Environment qualified as Env
 import System.Process qualified as Process
@@ -142,14 +143,24 @@ updateCalendar config tcal = forever do
 runNotifications :: Config.EctConfig -> TVar C.Calendar -> IO ()
 runNotifications config tcal = do
     when config.notification.enable do
-        threads <- Ref.newIORef Map.empty
+        threadsRef <- Ref.newIORef Map.empty
+
         forever do
             now <- C.now
             cal <- STM.readTVarIO tcal
+
             let
                 newEntries = C.entriesAfter numThreads now cal
-            newThreads <- Ref.readIORef threads >>= flip (mkNewThreadsMap now) newEntries
-            Ref.writeIORef threads newThreads
+            threads <- Ref.readIORef threadsRef
+            newThreads <- mkNewThreadsMap now threads newEntries
+
+            -- cancel threads that don't exist anymore
+            traverse_ Async.cancel
+                . Map.elems
+                $ Map.difference threads newThreads
+
+            -- update threads list
+            Ref.writeIORef threadsRef newThreads
 
             Conc.threadDelay 60_000_000
   where
@@ -217,15 +228,14 @@ runDaemon tcal = Network.withSocketsDo do
 
     receiveSkipUpdates :: STM.TVar Int -> Network.Socket -> IO ()
     receiveSkipUpdates tskip conn = forever do
-        buffer <- Foreign.mallocBytes 1024
-        size <- Network.recvBuf conn buffer 1024
-        result <- TF.fromPtr buffer (toEnum size)
-        case textToRunMode result of
-            Next n -> STM.atomically $ STM.writeTVar tskip n
-            Inc -> STM.atomically $ STM.modifyTVar tskip (+ 1)
-            Dec -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
-            Server -> pure ()
-            _otherwise -> pure ()
+        Foreign.allocaBytes 1024 \buffer -> do
+            size <- Network.recvBuf conn buffer 1024
+            result <- TF.fromPtr buffer (toEnum size)
+            case textToRunMode result of
+                Next n -> STM.atomically $ STM.writeTVar tskip n
+                Inc -> STM.atomically $ STM.modifyTVar tskip (+ 1)
+                Dec -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
+                _otherwise -> Conc.threadDelay 1_000_000
 
     sendEntry :: Network.Socket -> C.Entry -> IO ()
     sendEntry conn entry = do
