@@ -37,6 +37,7 @@ instance Aeson.FromJSON EctCalendarConfig
 data EctNotificationConfig = EctNotificationConfig
     { exec :: !Text
     , threads :: !Int
+    , enable :: !Bool
     }
     deriving stock (Generic)
 instance Aeson.FromJSON EctNotificationConfig

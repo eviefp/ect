@@ -141,16 +141,17 @@ updateCalendar config tcal = forever do
 
 runNotifications :: Config.EctConfig -> TVar C.Calendar -> IO ()
 runNotifications config tcal = do
-    threads <- Ref.newIORef Map.empty
-    forever do
-        now <- C.now
-        cal <- STM.readTVarIO tcal
-        let
-            newEntries = C.entriesAfter numThreads now cal
-        newThreads <- Ref.readIORef threads >>= flip (mkNewThreadsMap now) newEntries
-        Ref.writeIORef threads newThreads
+    when config.notification.enable do
+        threads <- Ref.newIORef Map.empty
+        forever do
+            now <- C.now
+            cal <- STM.readTVarIO tcal
+            let
+                newEntries = C.entriesAfter numThreads now cal
+            newThreads <- Ref.readIORef threads >>= flip (mkNewThreadsMap now) newEntries
+            Ref.writeIORef threads newThreads
 
-        Conc.threadDelay 60_000_000
+            Conc.threadDelay 60_000_000
   where
     numThreads :: Int
     numThreads = Config.threads . Config.notification $ config
