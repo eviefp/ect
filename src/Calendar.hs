@@ -204,7 +204,7 @@ instance Aeson.ToJSON UpcomingEntry where
                         ((/ 60) (Time.diffLocalTime (fromMaybe _entryStartTime _entryEndTime) _entryStartTime))
 
 printUpcomingDate :: Time.LocalTime -> String
-printUpcomingDate = Time.formatTime Time.defaultTimeLocale "%A, %d %b"
+printUpcomingDate = Time.formatTime Time.defaultTimeLocale "%a, %d %b"
 
 walkEntries :: Org.OrgDocument -> [Entry]
 walkEntries = Org.query go -- TODO: does this go deep?
