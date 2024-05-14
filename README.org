@@ -1,20 +1,24 @@
 * TODO
-- [ ] fix notifications
-- [ ] Exporter
-  - [ ] remaining fields
-  - [ ] exporter update with new fields!
-  - [ ] duration export in a reasonable format
-  - [ ] how can I permanently remove events from non-local calendars?
+- [ ] importer download failure crashes the server
+- [ ] fix notifications - ??
 
-- [ ] Parser
-  - [ ] location info for `mkCalendar` / reading calendar from a file
-    and store it in each Entry
+- [ ] Recurrence
+  - [ ] not handing it properly, should figure it out for both
+    imported and local calendars
+
+- [ ] Exporter
+  - [ ] exporter update with new fields!
+  - [ ] duration export in a reasonable format for events that last
+    more than one 60 minutes
+  - [ ] how can I permanently remove/hide events from non-local
+    calendars? some block list perhaps?
+
+- [ ] Parser -- https://orgmode.org/worg/org-syntax.html
+  - [ ] location info (!) for `mkCalendar` / reading calendar from a
+    file and store it in each Entry
   - [ ] inherit tags
 
 - [ ] TUI
   - [ ] ect new/edit -- emacsclient using location info?
-  - [ ] template for new agenda item
   - [ ] new mode like Week but with hours like gcal
-- [ ] Recurrence
-  - [ ] not handing it properly, should figure it out for both
-    imported and local calendars
+

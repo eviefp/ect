@@ -62,9 +62,10 @@ writeToOrgFile name outputPath cal = do
             pure $ Left "freeBusys > 0"
         | otherwise -> do
             now <- Calendar.now
+            timezone <- Time.getCurrentTimeZone
             let
                 timezoneInfo = parseTimezones now <$> C.vcTimeZones cal
-                text = foldMap (eventToOrgText name timezoneInfo) (Map.elems $ C.vcEvents cal)
+                text = foldMap (eventToOrgText name timezoneInfo timezone) (Map.elems $ C.vcEvents cal)
 
             T.writeFile (Strict.unpack outputPath) $ Builder.toLazyText text
             pure $ Right ()
@@ -150,8 +151,8 @@ parseTimezones now tz = Time.minutesToTimeZone offset
             (Just _, _) -> Just std
             (_, Just _) -> Just dl
 
-eventToOrgText :: Strict.Text -> Map Text Time.TimeZone -> C.VEvent -> Builder
-eventToOrgText name timezones C.VEvent {..} =
+eventToOrgText :: Strict.Text -> Map Text Time.TimeZone -> Time.TimeZone -> C.VEvent -> Builder
+eventToOrgText name timezones localTimeZone C.VEvent {..} =
     fold
         [ title
         , tag
@@ -243,9 +244,6 @@ eventToOrgText name timezones C.VEvent {..} =
 
     transparency :: Builder
     transparency = mkProperty "Transparency" transparencyToBuilder veTransp
-
-    localTimeZone :: Time.TimeZone
-    localTimeZone = fromMaybe Time.utc . Map.lookup "Europe/Bucharest" $ timezones
 
     startLocalTime :: Maybe Time.LocalTime
     startLocalTime =
