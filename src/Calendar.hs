@@ -10,6 +10,13 @@ module Calendar
     , entryProperties
     , entrySection
     , emptyEntry
+    , entryRepeat
+    , Repeat (..)
+    , _Daily
+    , _Workdays
+    , _Week
+    , _Monthly
+    , _Yearly
     , Properties (..)
     , propertyUid
     , propertyClass
@@ -25,12 +32,15 @@ module Calendar
     , now
     , entriesAfter
     , entriesFor
-    ) where
+    , expandRepeat
+    )
+where
 
-import Control.Lens (makeLenses)
+import Config qualified
+import Control.Lens (makeLenses, makePrisms, (%~), (&))
+import Control.Lens.Prism (_Just)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.IO.Class qualified as IO
-
 import Data.Aeson ((.=))
 import Data.Aeson qualified as Aeson
 import Data.Function (on)
@@ -45,10 +55,8 @@ import Data.Text.Lazy.Builder qualified as Builder
 import Data.Time qualified as Time
 import Data.Time.Calendar.MonthDay qualified as Time
 import Data.Time.Calendar.OrdinalDate qualified as Time
-
+import Debug.Trace qualified as D
 import GHC.Generics (Generic)
-
-import Config qualified
 import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
 import Org.Walk qualified as Org
@@ -66,11 +74,22 @@ data Properties = Properties
 
 makeLenses ''Properties
 
+data Repeat
+    = Daily
+    | Workdays
+    | Week
+    | Monthly
+    | Yearly
+    deriving stock (Eq, Generic)
+
+makePrisms ''Repeat
+
 data Entry = Entry
     { _entryTitle :: !Text
     , _entryTags :: ![Text]
     , _entryStartTime :: !Time.LocalTime
     , _entryEndTime :: !(Maybe Time.LocalTime)
+    , _entryRepeat :: !(Maybe Repeat)
     , _entryDescription :: !Text
     , _entryProperties :: !Properties
     , _entrySection :: !(Maybe Org.OrgSection)
@@ -81,19 +100,67 @@ makeLenses ''Entry
 
 newtype Calendar = Calendar {calendarEntries :: [Entry]}
 
-mkCalendar :: (MonadIO m) => [FilePath] -> m Calendar
-mkCalendar files =
+mkCalendar :: (MonadIO m) => ([Entry] -> [Entry]) -> [FilePath] -> m Calendar
+mkCalendar f files =
     Calendar
         . List.sortOn _entryStartTime
+        . f
         . concatMap walkEntries
         <$> traverse (OrgParser.parseOrgDocIO OrgParser.defaultOrgOptions) files
 
 fromConfig :: (MonadIO m) => Config.EctConfig -> m Calendar
-fromConfig config =
+fromConfig config = do
+    currentTime <- now
     let
         calendars = T.unpack . Config.path <$> config.calendars
-    in
-        mkCalendar calendars
+     in
+        mkCalendar (concatMap (expandRepeat currentTime)) calendars
+
+expandRepeat :: Time.LocalTime -> Entry -> [Entry]
+expandRepeat currentTime entry@Entry {..} = go <$> addTime
+  where
+    pastLimit :: Time.LocalTime
+    pastLimit = Time.addLocalTime (negate $ Time.nominalDay * 30) currentTime
+
+    workdays :: [Time.DayOfWeek]
+    workdays = [Time.Monday, Time.Tuesday, Time.Wednesday, Time.Thursday, Time.Friday]
+
+    addTime :: [Time.NominalDiffTime]
+    addTime =
+        case _entryRepeat of
+            Nothing -> [0]
+            Just r -> case r of
+                Daily ->
+                    if _entryStartTime > currentTime
+                        then [Time.nominalDay * k | k <- [0, 1 .. 60]]
+                        else
+                            take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
+                                [Time.nominalDay * k | k <- [0, 1 ..]]
+                Workdays ->
+                    if _entryStartTime > currentTime
+                        then
+                            take 60 $
+                                filter ((`elem` workdays) . Time.dayOfWeek . Time.localDay . flip Time.addLocalTime _entryStartTime) $
+                                    [Time.nominalDay * k | k <- [0, 1 ..]]
+                        else
+                            take 60
+                                . filter ((`elem` workdays) . Time.dayOfWeek . Time.localDay . flip Time.addLocalTime _entryStartTime)
+                                . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime)
+                                $ [Time.nominalDay * k | k <- [0, 1 ..]]
+                Week ->
+                    if _entryStartTime > currentTime
+                        then [Time.nominalDay * k | k <- [0, 7 .. 60]]
+                        else
+                            take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
+                                [Time.nominalDay * k | k <- [0, 7 ..]]
+                Monthly -> []
+                Yearly -> []
+
+    go :: Time.NominalDiffTime -> Entry
+    go diff =
+        entry
+            & entryStartTime %~ Time.addLocalTime diff
+            & entryEndTime . _Just %~ Time.addLocalTime diff
 
 now :: (MonadIO m) => m Time.LocalTime
 now = Time.zonedTimeToLocalTime <$> IO.liftIO Time.getZonedTime
@@ -130,6 +197,7 @@ emptyEntry =
         _entryDescription = ""
         _entryProperties = emptyProperties
         _entrySection = Nothing
+        _entryRepeat = Nothing
     in
         Entry {..}
 
@@ -213,7 +281,7 @@ walkEntries = Org.query go -- TODO: does this go deep?
     go section =
         case getFirst $ foldMap (Org.query findDatesInParagraphs) (Org.sectionChildren section) of
             Nothing -> []
-            Just (startDate, mEndDate) ->
+            Just (startDate, mEndDate, _entryRepeat) ->
                 let
                     _entryTitle = Org.sectionRawTitle section
                     _entryTags = Org.sectionTags section
@@ -291,14 +359,18 @@ mkProperties props =
     in
         Properties {..}
 
-findDatesInParagraphs :: Org.OrgObject -> First (Time.LocalTime, Maybe Time.LocalTime)
+findDatesInParagraphs :: Org.OrgObject -> First (Time.LocalTime, Maybe Time.LocalTime, Maybe Repeat)
 findDatesInParagraphs = \case
-    Org.Timestamp (Org.TimestampData _ start) -> First $ (,Nothing) <$> parseTimestampData start
-    Org.Timestamp (Org.TimestampRange _ start end) -> First $ (,parseTimestampData end) <$> parseTimestampData start
+    Org.Timestamp (Org.TimestampData _ start) -> First $ (\(mst, mrep) -> (mst, Nothing, mrep)) <$> parseTimestampData start
+    Org.Timestamp (Org.TimestampRange _ start end) -> First $ do
+        (s, mrep) <- parseTimestampData start
+        let
+            e = parseTimestampData end
+        pure (s, fst <$> e, mrep)
     _otherwise -> mempty
   where
-    parseTimestampData :: Org.DateTime -> Maybe Time.LocalTime
-    parseTimestampData ((y, m, d, _), mtime, _, _) = do
+    parseTimestampData :: Org.DateTime -> Maybe (Time.LocalTime, Maybe Repeat)
+    parseTimestampData ((y, m, d, _), mtime, mmark1, _) = do
         let
             year = toInteger y
             isLeapYear = Time.isLeapYear year
@@ -308,4 +380,16 @@ findDatesInParagraphs = \case
             case mtime of
                 Nothing -> Just Time.midnight
                 Just (hour, minute) -> Time.makeTimeOfDayValid hour minute 0
-        pure $ Time.LocalTime {..}
+        let
+            rep = mmark1 >>= parseRepeat
+        D.traceShowM mmark1
+        pure (Time.LocalTime {..}, rep)
+
+    parseRepeat :: Org.TimestampMark -> Maybe Repeat
+    parseRepeat = \case
+        ("+", 1, 'd') -> Just Daily
+        ("+", 1, 'h') -> Just Workdays
+        ("+", 1, 'w') -> Just Week
+        ("+", 1, 'm') -> Just Monthly
+        ("+", 1, 'y') -> Just Yearly
+        _otherwise -> Nothing

@@ -1,9 +1,9 @@
 module Exporter
     ( exportFiles
-    ) where
+    )
+where
 
 import Calendar (Calendar (..), Entry (..), mkCalendar)
-
 import Data.ByteString.Lazy qualified as BS
 import Data.Default (def)
 import Data.Hashable qualified as H
@@ -18,13 +18,12 @@ import Data.Time.Calendar qualified as T
 import Data.Time.Clock qualified as T
 import Data.Time.LocalTime qualified as T
 import Data.Version qualified as Version
-
 import Text.ICalendar.Printer qualified as C
 import Text.ICalendar.Types qualified as C
 
 exportFiles :: [FilePath] -> FilePath -> IO ()
 exportFiles files ics = do
-    icsCalendar <- toCalendarFormat <$> mkCalendar files <*> T.getCurrentTime
+    icsCalendar <- toCalendarFormat <$> mkCalendar id files <*> T.getCurrentTime
 
     BS.writeFile ics $ C.printICalendar def icsCalendar
 
