@@ -55,7 +55,6 @@ import Data.Text.Lazy.Builder qualified as Builder
 import Data.Time qualified as Time
 import Data.Time.Calendar.MonthDay qualified as Time
 import Data.Time.Calendar.OrdinalDate qualified as Time
-import Debug.Trace qualified as D
 import GHC.Generics (Generic)
 import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
@@ -382,7 +381,6 @@ findDatesInParagraphs = \case
                 Just (hour, minute) -> Time.makeTimeOfDayValid hour minute 0
         let
             rep = mmark1 >>= parseRepeat
-        D.traceShowM mmark1
         pure (Time.LocalTime {..}, rep)
 
     parseRepeat :: Org.TimestampMark -> Maybe Repeat
