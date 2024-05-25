@@ -4,3 +4,10 @@ source-repository-package
   type: git
   location: https://github.com/centralapp/iCalendar
   tag: 0858aa2ed64bc5357e943ab1e1327721e24b566d
+
+source-repository-package
+  type: git
+  location: https://github.com/eviefp/org-mode-hs
+  tag: 31416b5b4e0ed9f5fff60de9c4e854a2e9bef493
+  subdir: org-parser
+

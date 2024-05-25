@@ -386,7 +386,7 @@ findDatesInParagraphs = \case
     parseRepeat :: Org.TimestampMark -> Maybe Repeat
     parseRepeat = \case
         ("+", 1, 'd') -> Just Daily
-        ("+", 1, 'h') -> Just Workdays
+        ("+", 1, 'x') -> Just Workdays
         ("+", 1, 'w') -> Just Week
         ("+", 1, 'm') -> Just Monthly
         ("+", 1, 'y') -> Just Yearly

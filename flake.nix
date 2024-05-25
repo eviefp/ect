@@ -20,7 +20,6 @@
           hlib = pkgs.haskell.lib;
           hp = pkgs.haskell.packages.ghc963.override {
             overrides = hself: hsuper: {
-              org-parser = hlib.doJailbreak (hlib.markUnbroken hsuper.org-parser);
               async-timer = hlib.dontCheck (hlib.doJailbreak (hlib.markUnbroken hsuper.async-timer));
               iCalendar = hself.callCabal2nix "iCalendar"
                 (
@@ -30,7 +29,14 @@
                     rev = "0858aa2ed64bc5357e943ab1e1327721e24b566d";
                   })
                 { };
-
+              org-parser = hlib.doJailbreak (hself.callCabal2nix "org-parser"
+                ((
+                  builtins.fetchGit {
+                    url = "https://github.com/eviefp/org-mode-hs.git";
+                    ref = "main";
+                    rev = "31416b5b4e0ed9f5fff60de9c4e854a2e9bef493";
+                  }) + "/org-parser")
+                { });
               vty = hself.callCabal2nix "vty"
                 (
                   builtins.fetchGit {
