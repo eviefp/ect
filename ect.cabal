@@ -110,6 +110,7 @@ library
                     , modern-uri
                     , mtl
                     , network
+                    , optparse-generic
                     , org-parser
                     , process
                     , stm

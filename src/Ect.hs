@@ -32,25 +32,29 @@ import Data.Text.Foreign qualified as TF
 import Data.Text.IO qualified as T
 import Data.Text.Read qualified as TextRead
 import Data.Time qualified as Time
-
 import Data.Foldable (traverse_)
+
 import Network.Socket qualified as Network
 import System.Environment qualified as Env
 import System.Process qualified as Process
 import Text.Read qualified as R
+import GHC.Generics (Generic)
 
 socketAddress :: String
 socketAddress = "/tmp/ect/ect.socket.sock"
 
-data RunMode
-    = Next !Int
-    | Inc
-    | Dec
-    | Server
-    | Upcoming !Int
-    | Export
-    | Import
-    | Tui
+data Options
+    = Next { config :: Text, value :: Int }
+    | Inc { config :: Text }
+    | Dec { config :: Text }
+    | Server { config :: Text }
+    | Upcoming { config :: Text, value :: Int }
+    | Export { config :: Text }
+    | Import { config :: Text }
+    | Tui { config :: Text }
+    deriving (Generic, Show)
+
+
 
 parseArgs :: [String] -> Maybe RunMode
 parseArgs = \case
