@@ -12,10 +12,10 @@ defaultConfigPath = "ect/ect.yaml"
 testConfigPath :: FilePath
 testConfigPath = "./ect.yaml"
 
-getConfig :: IO EctConfig
-getConfig = Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath >>= Yaml.decodeFileThrow
+getConfig :: Maybe FilePath -> IO EctConfig
+getConfig path = maybe (Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath) pure path >>= Yaml.decodeFileThrow
 
--- getConfig = Yaml.decodeFileThrow testConfigPath
+-- getConfig _ = Yaml.decodeFileThrow testConfigPath
 
 data EctConfig = EctConfig
     { calendars :: ![EctCalendarConfig]

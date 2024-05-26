@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 module Ect (main) where
 
 import Calendar qualified as C
@@ -35,85 +36,69 @@ import Data.Time qualified as Time
 import Data.Foldable (traverse_)
 
 import Network.Socket qualified as Network
-import System.Environment qualified as Env
 import System.Process qualified as Process
-import Text.Read qualified as R
 import GHC.Generics (Generic)
+import qualified Options.Generic as Opt
 
 socketAddress :: String
 socketAddress = "/tmp/ect/ect.socket.sock"
 
 data Options
-    = Next { config :: Text, value :: Int }
-    | Inc { config :: Text }
-    | Dec { config :: Text }
-    | Server { config :: Text }
-    | Upcoming { config :: Text, value :: Int }
-    | Export { config :: Text }
-    | Import { config :: Text }
-    | Tui { config :: Text }
-    deriving (Generic, Show)
+    = Next { config :: Maybe FilePath, value :: Int }
+    | Inc { config :: Maybe FilePath }
+    | Dec { config :: Maybe FilePath }
+    | Server { config :: Maybe FilePath }
+    | Upcoming { config :: Maybe FilePath, value :: Int }
+    | Export { config :: Maybe FilePath }
+    | Import { config :: Maybe FilePath }
+    | Tui { config :: Maybe FilePath }
+    deriving stock (Generic, Show)
+    deriving anyclass Opt.ParseRecord
 
 
+data Command = Increment | Decrement | NextCommand !Int
 
-parseArgs :: [String] -> Maybe RunMode
-parseArgs = \case
-    ["--skip"] -> Just $ Next 0
-    ["--skip", k] -> Just $ Next (fromMaybe 0 $ R.readMaybe k)
-    ["--up"] -> Just Inc
-    ["--down"] -> Just Dec
-    ["--server"] -> Just Server
-    ["--upcoming"] -> Just $ Upcoming 10
-    ["--upcoming", k] -> Just $ Upcoming (fromMaybe 10 $ R.readMaybe k)
-    ["--export"] -> Just Export
-    ["--import"] -> Just Import
-    ["tui"] -> Just Tui
-    _k -> Just Tui
-
-runModeToText :: RunMode -> Maybe Text
+runModeToText :: Options -> Maybe Text
 runModeToText = \case
-    Server -> Nothing
-    Next k -> Just $ T.pack $ show k <> "\n"
-    Inc -> Just "inc\n"
-    Dec -> Just "dec\n"
-    Upcoming _ -> Nothing
-    Export -> Nothing
-    Import -> Nothing
-    Tui -> Nothing
+    Next _ k -> Just $ T.pack $ show k <> "\n"
+    Inc _ -> Just "inc\n"
+    Dec _ -> Just "dec\n"
+    _otherwise     -> Nothing
 
-textToRunMode :: Text -> RunMode
+textToRunMode :: Text -> Command
 textToRunMode input =
     case TextRead.decimal input of
         Left _ ->
             if input == "inc\n"
-                then Inc
+                then Increment
                 else
                     if input == "dec\n"
-                        then Dec
-                        else Next 0
+                        then Decrement
+                        else NextCommand 0
         Right (n, _) -> do
-            Next n
+            NextCommand n
 
-eval :: RunMode -> IO ()
-eval runMode = do
-    config <- Config.getConfig
-    cal <- C.fromConfig config
-    case runMode of
-        Server -> do
+main :: IO ()
+main = do
+    options <- Opt.getRecord "ect"
+    cfg <- Config.getConfig options.config
+    cal <- C.fromConfig cfg
+    case options of
+        Server _ -> do
             calTvar <- STM.newTVarIO cal
             Async.mapConcurrently_
                 id
-                [ updateCalendar config calTvar
+                [ updateCalendar cfg calTvar
                 , runDaemon calTvar
-                , runNotifications config calTvar
-                , HttpServer.run config.export
+                , runNotifications cfg calTvar
+                , HttpServer.run cfg.export
                 ]
-        Upcoming k -> processUpcoming cal k
-        Export -> runExport config
-        Import -> do
-            _ <- Importer.importFiles config.calendars
+        Upcoming _ k -> processUpcoming cal k
+        Export _ -> runExport cfg
+        Import _ -> do
+            _ <- Importer.importFiles cfg.calendars
             pure ()
-        Tui -> TUI.run config
+        Tui _ -> TUI.run cfg
         rm -> do
             socket <- Network.socket Network.AF_UNIX Network.Stream Network.defaultProtocol
             Network.connect socket $ Network.SockAddrUnix socketAddress
@@ -236,10 +221,9 @@ runDaemon tcal = Network.withSocketsDo do
             size <- Network.recvBuf conn buffer 1024
             result <- TF.fromPtr buffer (toEnum size)
             case textToRunMode result of
-                Next n -> STM.atomically $ STM.writeTVar tskip n
-                Inc -> STM.atomically $ STM.modifyTVar tskip (+ 1)
-                Dec -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
-                _otherwise -> Conc.threadDelay 1_000_000
+                NextCommand n -> STM.atomically $ STM.writeTVar tskip n
+                Increment -> STM.atomically $ STM.modifyTVar tskip (+ 1)
+                Decrement -> STM.atomically $ STM.modifyTVar tskip (\k -> max 0 (k - 1))
 
     sendEntry :: Network.Socket -> C.Entry -> IO ()
     sendEntry conn entry = do
@@ -297,10 +281,3 @@ runExport Config.EctConfig {..} =
         shouldExportCalendars = (T.unpack . Config.path <$> filter Config.shouldExport calendars)
     in
         Exporter.exportFiles shouldExportCalendars (T.unpack $ Config.outputPath export)
-
-main :: IO ()
-main = do
-    Env.getArgs >>= maybe showError eval . parseArgs
-
-showError :: IO ()
-showError = error "Could not parse input arguments."
