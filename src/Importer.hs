@@ -197,6 +197,7 @@ eventToOrgText name timezones localTimeZone C.VEvent {..} =
             , sequence__
             , status
             , transparency
+            , mkDrawerProperty "RecurrenceDebug" (Builder.fromString $ show veRRule)
             , "  :END:"
             , newline
             ]
