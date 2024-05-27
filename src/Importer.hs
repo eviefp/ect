@@ -252,7 +252,20 @@ eventToOrgText name timezones localTimeZone C.VEvent {..} =
             C.DTStartDate {..} -> Time.LocalTime (C.dateValue dtStartDateValue) Time.midnight
 
     startDate :: Builder
-    startDate = maybe mempty (mappend "  " . formatDate) startLocalTime
+    startDate = maybe mempty ((\r -> "  <" <> r <> recurrence <> ">") . formatDate) startLocalTime
+
+    recurrence :: Builder
+    recurrence = -- mkDrawerProperty "Recurrence" $ Builder.fromString $ show veRRule
+      case Set.toList veRRule of
+        [ C.RRule (C.Recur {..}) _ ] ->
+          if recurFreq == C.Weekly
+            then case length recurByDay of
+                    1 -> " +" <> Builder.fromString (show recurInterval) <> "w"
+                    5 -> " +" <> Builder.fromString (show recurInterval) <> "x"
+                    7 -> " +" <> Builder.fromString (show recurInterval) <> "d"
+                    _ -> ""
+            else ""
+        _otherwise -> ""
 
     endDate :: Builder
     endDate =
@@ -262,11 +275,11 @@ eventToOrgText name timezones localTimeZone C.VEvent {..} =
                 case veDTEndDuration of
                     Nothing -> mempty
                     Just (Left C.DTEndDateTime {..}) ->
-                        "--" <> formatDate (fromDateTime timezones localTimeZone dtEndDateTimeValue)
+                        "--<" <> formatDate (fromDateTime timezones localTimeZone dtEndDateTimeValue) <> ">"
                     Just (Left C.DTEndDate {..}) ->
-                        "--" <> formatDate (C.dateValue dtEndDateValue)
+                        "--" <> formatDate (C.dateValue dtEndDateValue) <> ">"
                     Just (Right C.DurationProp {..}) ->
-                        "--" <> formatDate (Time.addLocalTime (diffTime durationValue) startTime)
+                        "--" <> formatDate (Time.addLocalTime (diffTime durationValue) startTime) <> ">"
 
     diffTime :: C.Duration -> Clock.NominalDiffTime
     diffTime d =
@@ -325,7 +338,5 @@ statusToBuilder =
 
 formatDate :: forall t. (Time.FormatTime t) => t -> Builder
 formatDate time =
-    "<"
-        <> Builder.fromString
+        Builder.fromString
             (Time.formatTime Time.defaultTimeLocale "%Y-%m-%d %a %H:%M" time)
-        <> ">"
