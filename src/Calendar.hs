@@ -17,6 +17,8 @@ module Calendar
     , _Week
     , _Monthly
     , _Yearly
+    , RepeatUntil (..)
+    , _RUDate
     , Properties (..)
     , propertyUid
     , propertyClass
@@ -59,19 +61,7 @@ import GHC.Generics (Generic)
 import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
 import Org.Walk qualified as Org
-
-data Properties = Properties
-    { _propertyUid :: !Text
-    , _propertyClass :: !Text
-    , _propertyLocation :: !(Maybe Text)
-    , _propertyOrganizer :: !(Maybe Text)
-    , _propertySequence :: !Int
-    , _propertyStatus :: !(Maybe Text)
-    , _propertyTransparency :: !Text
-    }
-    deriving stock (Eq, Generic)
-
-makeLenses ''Properties
+import Control.Applicative ((<|>))
 
 data Repeat
     = Daily
@@ -82,6 +72,27 @@ data Repeat
     deriving stock (Eq, Generic)
 
 makePrisms ''Repeat
+
+data RepeatUntil
+    = RUDate !Time.LocalTime
+    | RUCount !Int
+    deriving stock (Eq, Generic)
+
+makePrisms ''RepeatUntil
+
+data Properties = Properties
+    { _propertyUid :: !Text
+    , _propertyClass :: !Text
+    , _propertyLocation :: !(Maybe Text)
+    , _propertyOrganizer :: !(Maybe Text)
+    , _propertySequence :: !Int
+    , _propertyStatus :: !(Maybe Text)
+    , _propertyTransparency :: !Text
+    , _propertyRepeatUntil :: !(Maybe RepeatUntil)
+    }
+    deriving stock (Eq, Generic)
+
+makeLenses ''Properties
 
 data Entry = Entry
     { _entryTitle :: !Text
@@ -124,36 +135,45 @@ expandRepeat currentTime entry@Entry {..} = go <$> addTime
     workdays :: [Time.DayOfWeek]
     workdays = [Time.Monday, Time.Tuesday, Time.Wednesday, Time.Thursday, Time.Friday]
 
+    repeatUntil :: Time.LocalTime
+    repeatUntil =
+        case _entryProperties._propertyRepeatUntil of
+            Nothing -> Time.addLocalTime 100 currentTime
+            Just (RUCount _) -> Time.addLocalTime 100 currentTime -- TODO: this is probably wrong
+            Just (RUDate d) -> d
+
     addTime :: [Time.NominalDiffTime]
     addTime =
-        case _entryRepeat of
-            Nothing -> [0]
-            Just r -> case r of
-                Daily ->
-                    if _entryStartTime > currentTime
-                        then [Time.nominalDay * k | k <- [0, 1 .. 60]]
-                        else
-                            take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
-                                [Time.nominalDay * k | k <- [0, 1 ..]]
-                Workdays ->
-                    if _entryStartTime > currentTime
-                        then
-                            take 60 $
-                                filter ((`elem` workdays) . Time.dayOfWeek . Time.localDay . flip Time.addLocalTime _entryStartTime) $
+        if repeatUntil < currentTime
+            then []
+            else case _entryRepeat of
+                Nothing -> [0]
+                Just r -> case r of
+                    Daily ->
+                        if _entryStartTime > currentTime
+                            then [Time.nominalDay * k | k <- [0, 1 .. 60]]
+                            else
+                                take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
                                     [Time.nominalDay * k | k <- [0, 1 ..]]
-                        else
-                            take 60
-                                . filter ((`elem` workdays) . Time.dayOfWeek . Time.localDay . flip Time.addLocalTime _entryStartTime)
-                                . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime)
-                                $ [Time.nominalDay * k | k <- [0, 1 ..]]
-                Week ->
-                    if _entryStartTime > currentTime
-                        then [Time.nominalDay * k | k <- [0, 7 .. 60]]
-                        else
-                            take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
-                                [Time.nominalDay * k | k <- [0, 7 ..]]
-                Monthly -> []
-                Yearly -> []
+                    Workdays ->
+                        if _entryStartTime > currentTime
+                            then
+                                take 60 $
+                                    filter ((`elem` workdays) . Time.dayOfWeek . Time.localDay . flip Time.addLocalTime _entryStartTime) $
+                                        [Time.nominalDay * k | k <- [0, 1 ..]]
+                            else
+                                take 60
+                                    . filter ((`elem` workdays) . Time.dayOfWeek . Time.localDay . flip Time.addLocalTime _entryStartTime)
+                                    . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime)
+                                    $ [Time.nominalDay * k | k <- [0, 1 ..]]
+                    Week ->
+                        if _entryStartTime > currentTime
+                            then [Time.nominalDay * k | k <- [0, 7 .. 60]]
+                            else
+                                take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
+                                    [Time.nominalDay * k | k <- [0, 7 ..]]
+                    Monthly -> []
+                    Yearly -> []
 
     go :: Time.NominalDiffTime -> Entry
     go diff =
@@ -210,6 +230,7 @@ emptyProperties =
         _propertySequence = 0
         _propertyStatus = Nothing
         _propertyTransparency = ""
+        _propertyRepeatUntil = Nothing
     in
         Properties {..}
 
@@ -280,12 +301,10 @@ walkEntries = Org.query go -- TODO: does this go deep?
     go section =
         case getFirst $ foldMap (Org.query findDatesInParagraphs) (Org.sectionChildren section) of
             Nothing -> []
-            Just (startDate, mEndDate, _entryRepeat) ->
+            Just (_entryStartTime, _entryEndTime, _entryRepeat) ->
                 let
                     _entryTitle = Org.sectionRawTitle section
                     _entryTags = Org.sectionTags section
-                    _entryStartTime = startDate
-                    _entryEndTime = mEndDate
                     _entryProperties = mkProperties $ Org.sectionProperties section
                     _entryDescription =
                         LazyText.toStrict $
@@ -348,15 +367,25 @@ mkProperties props =
         get key = Map.lookup key props
         getDef key def = fromMaybe def $ get key
 
-        _propertyUid = getDef "UID" ""
-        _propertyClass = getDef "Class" ""
-        _propertyLocation = get "Location"
-        _propertyOrganizer = get "Organizer"
-        _propertySequence = read . T.unpack $ getDef "Sequence" "0"
-        _propertyStatus = get "Status"
-        _propertyTransparency = getDef "Transparency" ""
+        _propertyUid = getDef "uid" ""
+        _propertyClass = getDef "class" ""
+        _propertyLocation = get "location"
+        _propertyOrganizer = get "organizer"
+        _propertySequence = read . T.unpack $ getDef "sequence" "0"
+        _propertyStatus = get "status"
+        _propertyTransparency = getDef "transparency" ""
+        _propertyRepeatUntil = get "repeatuntil" >>= parseRepeatUntil
     in
         Properties {..}
+  where
+    parseRepeatUntil :: Text -> Maybe RepeatUntil
+    parseRepeatUntil t = parseRepeatDate t <|> parseRepeatCount t
+
+    parseRepeatCount :: Text -> Maybe RepeatUntil
+    parseRepeatCount = fmap RUCount . read . T.unpack
+
+    parseRepeatDate :: Text -> Maybe RepeatUntil
+    parseRepeatDate = fmap RUDate . Time.parseTimeM True Time.defaultTimeLocale "%Y-%m-%d %a %H:%M" . T.unpack
 
 findDatesInParagraphs :: Org.OrgObject -> First (Time.LocalTime, Maybe Time.LocalTime, Maybe Repeat)
 findDatesInParagraphs = \case

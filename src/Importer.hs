@@ -28,6 +28,7 @@ import Network.Wreq qualified as Wreq
 
 import Text.ICalendar.Parser qualified as CalParser
 import Text.ICalendar.Types qualified as C
+import Control.Monad (join)
 
 importFiles :: [Config.EctCalendarConfig] -> IO ()
 importFiles = traverse_ importFile
@@ -157,10 +158,10 @@ eventToOrgText name timezones localTimeZone C.VEvent {..} =
         [ title
         , tag
         , newline
+        , drawer
         , startDate
         , endDate
         , newline
-        , drawer
         , description
         , newline
         , newline
@@ -197,6 +198,7 @@ eventToOrgText name timezones localTimeZone C.VEvent {..} =
             , sequence__
             , status
             , transparency
+            , mkProperty "RepeatUntil" (repeatUntil . join . fmap (C.recurUntilCount . C.rRuleValue) . listToMaybe . Set.toList) veRRule
             , mkDrawerProperty "RecurrenceDebug" (Builder.fromString $ show veRRule)
             , "  :END:"
             , newline
@@ -281,6 +283,13 @@ eventToOrgText name timezones localTimeZone C.VEvent {..} =
                         "--" <> formatDate (C.dateValue dtEndDateValue) <> ">"
                     Just (Right C.DurationProp {..}) ->
                         "--" <> formatDate (Time.addLocalTime (diffTime durationValue) startTime) <> ">"
+
+    repeatUntil :: Maybe (Either (Either C.Date C.DateTime) Int) -> Builder
+    repeatUntil = \case
+      Just (Left (Right dt)) -> formatDate $ fromDateTime timezones localTimeZone dt
+      Just (Left (Left d)) -> formatDate $ Time.LocalTime (C.dateValue d) Time.midnight
+      Just (Right c) -> Builder.fromString $ show c
+      Nothing -> ""
 
     diffTime :: C.Duration -> Clock.NominalDiffTime
     diffTime d =
