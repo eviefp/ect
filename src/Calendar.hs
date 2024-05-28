@@ -62,6 +62,7 @@ import Org.Parser qualified as OrgParser
 import Org.Types qualified as Org
 import Org.Walk qualified as Org
 import Control.Applicative ((<|>))
+import Text.Read (readMaybe)
 
 data Repeat
     = Daily
@@ -382,7 +383,7 @@ mkProperties props =
     parseRepeatUntil t = parseRepeatDate t <|> parseRepeatCount t
 
     parseRepeatCount :: Text -> Maybe RepeatUntil
-    parseRepeatCount = fmap RUCount . read . T.unpack
+    parseRepeatCount = fmap RUCount . readMaybe . T.unpack
 
     parseRepeatDate :: Text -> Maybe RepeatUntil
     parseRepeatDate = fmap RUDate . Time.parseTimeM True Time.defaultTimeLocale "%Y-%m-%d %a %H:%M" . T.unpack
