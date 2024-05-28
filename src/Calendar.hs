@@ -140,7 +140,7 @@ expandRepeat currentTime entry@Entry {..} = go <$> addTime
     repeatUntil =
         case _entryProperties._propertyRepeatUntil of
             Nothing -> Time.addLocalTime (1000 * Tome.nominalDay) currentTime
-            Just (RUCount _) -> Time.addLocalTime (1000 * Tome.nominalDay) currentTime -- TODO: this is probably wrong
+            Just (RUCount _) -> Time.addLocalTime (1000 * Time.nominalDay) currentTime -- TODO: this is probably wrong
             Just (RUDate d) -> d
 
     addTime :: [Time.NominalDiffTime]
