@@ -26,11 +26,14 @@ import Data.Time.Clock qualified as Clock
 
 import Network.Wreq qualified as Wreq
 
+import Control.Exception (try)
+import Control.Exception.Base (IOException)
+import Control.Monad (void)
 import Text.ICalendar.Parser qualified as CalParser
 import Text.ICalendar.Types qualified as C
 
 importFiles :: [Config.EctCalendarConfig] -> IO ()
-importFiles = traverse_ importFile
+importFiles = traverse_ (void . try @IOException . importFile)
 
 importFile :: Config.EctCalendarConfig -> IO (Either String ())
 importFile Config.EctCalendarConfig {..} =

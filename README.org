@@ -1,5 +1,5 @@
 * TODO
-- [ ] importer download failure crashes the server
+- [X] importer download failure crashes the server
 - [ ] fix notifications - ??
 
 - [ ] Recurrence
