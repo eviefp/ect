@@ -18,7 +18,7 @@
       packages = forAllSystems ({ pkgs }:
         let
           hlib = pkgs.haskell.lib;
-          hp = pkgs.haskell.packages.ghc963.override {
+          hp = pkgs.haskell.packages.ghc965.override {
             overrides = hself: hsuper: {
               async-timer = hlib.dontCheck (hlib.doJailbreak (hlib.markUnbroken hsuper.async-timer));
               iCalendar = hself.callCabal2nix "iCalendar"
@@ -63,13 +63,11 @@
           name = "ect-shell";
           nativeBuildInputs = [
             pkgs.zlib.dev
-            pkgs.haskell.compiler.ghc963
-            pkgs.haskell.packages.ghc963.cabal-install
-            pkgs.haskell.packages.ghc963.cabal2nix
-            # pkgs.haskell.packages.ghc981.implicit-hie
-            # pkgs.haskell.packages.ghc981.hoogle
-            # pkgs.haskell.packages.ghc981.json-to-haskell
-            pkgs.haskell.packages.ghc963.haskell-language-server
+            pkgs.haskell.compiler.ghc965
+            pkgs.haskell.packages.ghc965.cabal-install
+            pkgs.haskell.packages.ghc965.cabal2nix
+            pkgs.haskell.packages.ghc965.hoogle
+            pkgs.haskell.packages.ghc965.haskell-language-server
             pkgs.inotify-tools
           ];
         };
