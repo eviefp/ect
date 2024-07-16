@@ -174,7 +174,7 @@ expandRepeat currentTime entry@Entry {..} = go <$> addTime
                     $ [Time.nominalDay * k | k <- [0, 1 ..]]
             Week ->
               if _entryStartTime > currentTime
-                then [Time.nominalDay * k | k <- [0, 7 .. 60]]
+                then [Time.nominalDay * k | k <- [0, 7 .. 10000]]
                 else
                   take 60 . dropWhile ((>) pastLimit . flip Time.addLocalTime _entryStartTime) $
                     [Time.nominalDay * k | k <- [0, 7 ..]]
