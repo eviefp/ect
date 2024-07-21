@@ -1,10 +1,6 @@
 * TODO
-- [X] importer download failure crashes the server
-- [ ] fix notifications - ??
-
-- [ ] Recurrence
-  - [ ] not handing it properly, should figure it out for both
-    imported and local calendars
+- [ ] show previous items too
+- [ ] show duration properly when > 1h
 
 - [ ] Exporter
   - [ ] exporter update with new fields!

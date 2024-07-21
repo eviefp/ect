@@ -91,6 +91,7 @@ library
                       , OverloadedRecordDot
                       , OverloadedStrings
                       , RecordWildCards
+                      , StrictData
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.18.1.0

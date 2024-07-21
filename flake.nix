@@ -61,8 +61,8 @@
       devShells = forAllSystems ({ pkgs }: {
         default = pkgs.mkShell {
           name = "ect-shell";
-          nativeBuildInputs = [
-            pkgs.zlib.dev
+          buildInputs = [
+            pkgs.zlib
             pkgs.haskell.compiler.ghc963
             pkgs.haskell.packages.ghc963.cabal-install
             pkgs.haskell.packages.ghc963.cabal2nix
