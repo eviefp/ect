@@ -2,6 +2,7 @@
 - [ ] show previous items too
 - [ ] show duration properly when > 1h
 
+
 - [ ] Exporter
   - [ ] exporter update with new fields!
   - [ ] duration export in a reasonable format for events that last
