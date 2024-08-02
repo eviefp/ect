@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = github:NixOS/nixpkgs/nixpkgs-unstable;
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs =
@@ -18,7 +18,7 @@
       packages = forAllSystems ({ pkgs }:
         let
           hlib = pkgs.haskell.lib;
-          hp = pkgs.haskell.packages.ghc963.override {
+          hp = pkgs.haskell.packages.ghc966.override {
             overrides = hself: hsuper: {
               async-timer = hlib.dontCheck (hlib.doJailbreak (hlib.markUnbroken hsuper.async-timer));
               iCalendar = hself.callCabal2nix "iCalendar"
@@ -63,13 +63,10 @@
           name = "ect-shell";
           buildInputs = [
             pkgs.zlib
-            pkgs.haskell.compiler.ghc963
-            pkgs.haskell.packages.ghc963.cabal-install
-            pkgs.haskell.packages.ghc963.cabal2nix
-            # pkgs.haskell.packages.ghc981.implicit-hie
-            # pkgs.haskell.packages.ghc981.hoogle
-            # pkgs.haskell.packages.ghc981.json-to-haskell
-            pkgs.haskell.packages.ghc963.haskell-language-server
+            pkgs.haskell.compiler.ghc966
+            pkgs.haskell.packages.ghc966.cabal-install
+            pkgs.haskell.packages.ghc966.cabal2nix
+            pkgs.haskell.packages.ghc966.haskell-language-server
             pkgs.inotify-tools
           ];
         };
