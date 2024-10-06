@@ -3,3 +3,5 @@
 /ect.yaml
 *~undo-tree~
 /result
+/src/ect.yaml
+/test/*.ics
