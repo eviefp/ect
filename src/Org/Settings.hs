@@ -1,14 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Org.Settings
-    ( OrgSettings (..)
-    , todoKeywords
-    , todo
-    , Parser
-    , identifier
-    , someOf
-    , spaces
-    ) where
+  ( OrgSettings (..)
+  , todoKeywords
+  , todo
+  , Parser
+  , identifier
+  , someOf
+  , spaces
+  ) where
 
 import Control.Lens (makeLenses)
 import Control.Monad.Reader (Reader)
@@ -19,9 +19,9 @@ import Data.Void (Void)
 import Text.Megaparsec qualified as M
 
 data OrgSettings = OrgSettings
-    { _todoKeywords :: ![Text]
-    , _todo :: !()
-    }
+  { _todoKeywords :: ![Text]
+  , _todo :: !()
+  }
 
 makeLenses ''OrgSettings
 

@@ -1,8 +1,8 @@
 module TUI.Component.List
-  ( State,
-    draw,
-    handleEvent,
-    build,
+  ( State
+  , draw
+  , handleEvent
+  , build
   )
 where
 

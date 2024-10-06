@@ -18,34 +18,34 @@ getConfig path = maybe (Dir.getXdgDirectory Dir.XdgConfig defaultConfigPath) pur
 -- getConfig _ = Yaml.decodeFileThrow testConfigPath
 
 data EctConfig = EctConfig
-    { calendars :: ![EctCalendarConfig]
-    , notification :: !EctNotificationConfig
-    , export :: !EctExportConfig
-    }
-    deriving stock (Generic)
+  { calendars :: ![EctCalendarConfig]
+  , notification :: !EctNotificationConfig
+  , export :: !EctExportConfig
+  }
+  deriving stock (Generic)
 instance Aeson.FromJSON EctConfig
 
 data EctCalendarConfig = EctCalendarConfig
-    { name :: !Text
-    , importFrom :: !(Maybe Text)
-    , path :: !Text
-    , shouldExport :: !Bool
-    }
-    deriving stock (Generic)
+  { name :: !Text
+  , importFrom :: !(Maybe Text)
+  , path :: !Text
+  , shouldExport :: !Bool
+  }
+  deriving stock (Generic)
 instance Aeson.FromJSON EctCalendarConfig
 
 data EctNotificationConfig = EctNotificationConfig
-    { exec :: !Text
-    , threads :: !Int
-    , enable :: !Bool
-    }
-    deriving stock (Generic)
+  { exec :: !Text
+  , threads :: !Int
+  , enable :: !Bool
+  }
+  deriving stock (Generic)
 instance Aeson.FromJSON EctNotificationConfig
 
 data EctExportConfig = EctExportConfig
-    { enable :: !Bool
-    , outputPath :: !Text
-    , httpPort :: !Int
-    }
-    deriving stock (Generic)
+  { enable :: !Bool
+  , outputPath :: !Text
+  , httpPort :: !Int
+  }
+  deriving stock (Generic)
 instance Aeson.FromJSON EctExportConfig

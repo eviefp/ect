@@ -13,11 +13,11 @@ main = defaultMain tests
 
 tests :: TestTree
 tests =
-    testGroup
-        "Org tests"
-        [ Heading.test
-        , Block.test
-        , Drawer.test
-        , Footnote.test
-        , Item.test
-        ]
+  testGroup
+    "Org tests"
+    [ Heading.test
+    , Block.test
+    , Drawer.test
+    , Footnote.test
+    , Item.test
+    ]

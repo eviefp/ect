@@ -1,11 +1,11 @@
 module Org
-    ( module Heading
-    , module Block
-    , module Drawer
-    , module Footnote
-    , module Settings
-    , module Item
-    ) where
+  ( module Heading
+  , module Block
+  , module Drawer
+  , module Footnote
+  , module Settings
+  , module Item
+  ) where
 
 import Org.Block as Block (Block (..), parseBlock)
 import Org.Drawer as Drawer (Drawer (..), parseDrawer)
