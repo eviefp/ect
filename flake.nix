@@ -39,7 +39,7 @@
         formatter = treefmt.wrapper;
         checks = {
           fmt = treefmt.check self;
-          hlint = pkgs.runCommand "hlint" { buildInputs = [ pkgs.haskell.packages.ghc910.hlint ]; } ''
+          hlint = pkgs.runCommand "hlint" { buildInputs = [ pkgs.hlint ]; } ''
             cd ${./.}
             hlint src test app
             touch $out
@@ -53,6 +53,7 @@
               pkgs.haskellPackages.cabal-fmt
               pkgs.haskell.compiler.ghc910
               pkgs.haskell.packages.ghc910.cabal-install
+              pkgs.hlint
               # pkgs.haskell.packages.ghc910.cabal2nix
               # pkgs.haskell.packages.ghc910.implicit-hie
               # pkgs.haskell.packages.ghc910.hoogle
